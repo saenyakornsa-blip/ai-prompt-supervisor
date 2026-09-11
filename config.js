@@ -10,9 +10,10 @@
 // ============================================================
 
 const SUPABASE_CONFIG = {
-  url: '',        // เช่น https://xyz.supabase.co
-  anonKey: '',    // เริ่มต้นด้วย eyJ...
-  enabled: false  // เปลี่ยนเป็น true เมื่อเชื่อมต่อ Supabase
+  url: 'https://bgthbihseqglxzsfguqy.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJndGhiaWhzZXFnbHh6c2ZndXF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwOTI3ODUsImV4cCI6MjEwNDY2ODc4NX0.P70FCUiwPl_zeeirp7wLPNwJB0qpQ5tpMk825e01ueU',
+  publishableKey: 'sb_publishable_PQqR2oL00DuycGofIMq2bg_4hbWw1z9',
+  enabled: true
 };
 
 // ============================================================

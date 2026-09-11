@@ -1266,9 +1266,10 @@ async function signUp() {
 
 async function signInWithGoogle() {
   if (!_sb) { showToast('ระบบล็อกอินยังไม่พร้อมใช้งาน', 'error'); return; }
+  const redirectUrl = window.location.origin + window.location.pathname;
   const { error } = await _sb.auth.signInWithOAuth({
     provider: 'google',
-    options:  { redirectTo: window.location.href }
+    options:  { redirectTo: redirectUrl }
   });
   if (error) showToast('ล็อกอินด้วย Google ไม่สำเร็จ: ' + error.message, 'error');
 }

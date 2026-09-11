@@ -40,11 +40,44 @@ let _sb = null;
 
 function initSupabase() {
   if (!SUPABASE_CONFIG.enabled) return;
+
+  // 1. Fix double hashtag if redirected like ##access_token=
+  if (window.location.hash && window.location.hash.startsWith('##')) {
+    const fixedHash = '#' + window.location.hash.replace(/^#+/, '');
+    history.replaceState(null, '', window.location.pathname + window.location.search + fixedHash);
+  }
+
+  // 2. Extract OAuth tokens if present in URL hash
+  let manualOAuthSession = null;
+  if (window.location.hash && window.location.hash.includes('access_token=')) {
+    try {
+      const cleanHash = window.location.hash.replace(/^#+/, '');
+      const params = new URLSearchParams(cleanHash);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      if (accessToken) {
+        manualOAuthSession = { access_token: accessToken, refresh_token: refreshToken || '' };
+      }
+    } catch (e) {
+      console.warn('OAuth hash parse warning:', e);
+    }
+  }
+
+  function onSessionReady(session) {
+    if (session?.user) {
+      onAuthStateChanged(session.user);
+      // Clean token from URL bar cleanly
+      if (window.location.hash && window.location.hash.includes('access_token')) {
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+  }
+
   if (window.supabase) {
     try {
       _sb = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
       console.log('[Supabase] Client initialised');
-      setupAuthListeners();
+      setupAuthListeners(manualOAuthSession, onSessionReady);
     } catch (err) { console.warn('[Supabase] init failed:', err); }
     return;
   }
@@ -54,19 +87,37 @@ function initSupabase() {
     try {
       _sb = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
       console.log('[Supabase] Client initialised (dynamic)');
-      setupAuthListeners();
+      setupAuthListeners(manualOAuthSession, onSessionReady);
     } catch (err) { console.warn('[Supabase] dynamic init failed:', err); }
   };
   document.head.appendChild(script);
 }
 
-function setupAuthListeners() {
+function setupAuthListeners(manualSession, onSessionReady) {
   if (!_sb) return;
+
+  // Set session from URL if detected
+  if (manualSession && manualSession.access_token) {
+    _sb.auth.setSession({
+      access_token: manualSession.access_token,
+      refresh_token: manualSession.refresh_token || ''
+    }).then(({ data, error }) => {
+      if (!error && data?.session) {
+        if (onSessionReady) onSessionReady(data.session);
+      }
+    });
+  }
+
   _sb.auth.getSession().then(async ({ data: { session } }) => {
-    if (session?.user) await onAuthStateChanged(session.user);
+    if (session?.user) {
+      await onAuthStateChanged(session.user);
+      if (onSessionReady) onSessionReady(session);
+    }
   });
+
   _sb.auth.onAuthStateChange(async (_event, session) => {
     await onAuthStateChanged(session?.user || null);
+    if (session && onSessionReady) onSessionReady(session);
   });
 }
 
@@ -1901,7 +1952,7 @@ async function init() {
   setupEventListeners();
 
   // 8. Check URL hash for deep-link
-  if (window.location.hash) {
+  if (window.location.hash && !window.location.hash.includes('access_token')) {
     const promptId = window.location.hash.slice(1);
     if (PROMPTS_DATA.find(p => p.id === promptId)) {
       setTimeout(() => openPromptModal(promptId), 100);
@@ -1955,6 +2006,7 @@ function setupEventListeners() {
 
   // Browser back/forward for hash-based deep links
   window.addEventListener('hashchange', () => {
+    if (window.location.hash.includes('access_token')) return;
     const promptId = window.location.hash.slice(1);
     if (promptId && PROMPTS_DATA.find(p => p.id === promptId)) {
       openPromptModal(promptId);

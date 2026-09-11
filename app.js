@@ -132,16 +132,21 @@ function navigateTo(view) {
 
   VIEWS.forEach(v => {
     const el = document.getElementById(`view-${v}`);
-    if (el) if (v === view) {
-      el.style.display = 'block';
-      el.classList.add('active');
-    } else {
-      el.style.display = 'none';
-      el.classList.remove('active');
+    if (el) {
+      if (v === view) {
+        el.style.display = 'block';
+        el.classList.add('active');
+        el.classList.remove('hidden');
+      } else {
+        el.style.display = 'none';
+        el.classList.remove('active');
+        el.classList.add('hidden');
+      }
     }
   });
 
   updateNavActive(view);
+  updateSidebarActive();
 
   if (view === 'favorites')  renderFavoritesView();
   if (view === 'dashboard')  loadDashboard();
@@ -239,6 +244,13 @@ function filterByChapter(bookNum, chapterNum) {
   state.activeBook    = bookNum;
   state.activeChapter = chapterNum;
   state.currentPage   = 1;
+
+  // Ensure this book's chapter list is open
+  const chapters = document.getElementById('chapters-' + bookNum);
+  const chevron  = document.querySelector('[data-book="' + bookNum + '"] .chevron');
+  if (chapters) chapters.style.display = 'block';
+  if (chevron) chevron.textContent = '▾';
+
   updateSidebarActive();
   applySortAndFilter();
 }
@@ -267,6 +279,7 @@ function filterMaster() {
   state.currentPage  = 1;
   const btn = document.getElementById('master-filter-btn');
   if (btn) btn.classList.toggle('active', state.isMasterOnly);
+  updateSidebarActive();
   applySortAndFilter();
 }
 
@@ -281,40 +294,65 @@ function toggleBook(bookNum) {
     return;
   }
 
-  const isOpen = chapters.style.display !== 'none' && chapters.style.display !== '';
+  const isCurrentlyOpen = chapters.style.display !== 'none' && chapters.style.display !== '';
 
   // Close all other chapter menus first
-  [1, 2, 3].forEach(function(b) {
-    const ch = document.getElementById('chapters-' + b);
-    const cv = document.querySelector('[data-book="' + b + '"] .chevron');
-    if (ch) ch.style.display = 'none';
-    if (cv) cv.textContent = '▸';
+  [1, 2, 3, 4].forEach(function(b) {
+    if (b !== bookNum) {
+      const ch = document.getElementById('chapters-' + b);
+      const cv = document.querySelector('[data-book="' + b + '"] .chevron');
+      if (ch) ch.style.display = 'none';
+      if (cv) cv.textContent = '▸';
+    }
   });
 
-  if (!isOpen) {
+  if (!isCurrentlyOpen) {
     chapters.style.display = 'block';
     if (chevron) chevron.textContent = '▾';
     filterByBook(bookNum);
   } else {
-    filterByBook(null);
+    // If already open and currently viewing this book, collapse it and show all
+    if (state.activeBook === bookNum) {
+      chapters.style.display = 'none';
+      if (chevron) chevron.textContent = '▸';
+      filterByBook(null);
+    } else {
+      filterByBook(bookNum);
+    }
   }
 }
 
 // Highlight active item in sidebar
 function updateSidebarActive() {
+  const isAll = (state.activeBook === null && state.activeChapter === null && !state.isMasterOnly);
+
   // Highlight "ทั้งหมด"
   document.querySelectorAll('[data-filter="all"]').forEach(function(el) {
-    el.classList.toggle('active', state.activeBook === null && state.activeChapter === null);
+    el.classList.toggle('active', isAll && state.currentView === 'home');
   });
-  // Highlight active book header
-  [1, 2, 3].forEach(function(b) {
+
+  // Highlight active book header [1, 2, 3, 4]
+  [1, 2, 3, 4].forEach(function(b) {
     const header = document.querySelector('[data-book="' + b + '"] .nav-book-header');
-    if (header) header.classList.toggle('active', state.activeBook === b);
+    if (header) {
+      header.classList.toggle('active', state.activeBook === b && state.currentView === 'home');
+    }
   });
+
   // Highlight active chapter button
   document.querySelectorAll('.nav-chapter').forEach(function(btn) {
-    btn.classList.remove('active');
+    const onclickStr = btn.getAttribute('onclick') || '';
+    const match = (state.activeBook !== null && state.activeChapter !== null && state.currentView === 'home') &&
+      (onclickStr.includes(`(${state.activeBook},${state.activeChapter})`) ||
+       onclickStr.includes(`(${state.activeBook}, ${state.activeChapter})`));
+    btn.classList.toggle('active', Boolean(match));
   });
+
+  // Highlight Master Prompts button in sidebar if active
+  const masterSidebarBtn = document.getElementById('sidebar-master-btn');
+  if (masterSidebarBtn) {
+    masterSidebarBtn.classList.toggle('active', Boolean(state.isMasterOnly && state.currentView === 'home'));
+  }
 }
 
 function applySortAndFilter() {
@@ -1602,28 +1640,6 @@ function renderTagsBar() {
   ].join('');
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   20. SIDEBAR BOOK TOGGLE
-═══════════════════════════════════════════════════════════════ */
-function toggleBook(bookNum) {
-  const chapters = document.getElementById(`chapters-${bookNum}`);
-  const chevron  = document.getElementById(`chevron-${bookNum}`);
-  if (!chapters) return;
-  const isHidden = chapters.classList.toggle('hidden');
-  if (chevron) chevron.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(90deg)';
-}
-
-function updateSidebarActive() {
-  document.querySelectorAll('.sidebar-book-item').forEach(el => {
-    el.classList.toggle('active', Number(el.dataset.book) === state.activeBook);
-  });
-  document.querySelectorAll('.sidebar-chapter-item').forEach(el => {
-    el.classList.toggle('active',
-      Number(el.dataset.book) === state.activeBook &&
-      Number(el.dataset.chapter) === state.activeChapter
-    );
-  });
-}
 
 /* ═══════════════════════════════════════════════════════════════
    21. DASHBOARD
@@ -2113,18 +2129,6 @@ function setView(mode) {
   });
 }
 
-/**
- * Update the active state on both top nav and bottom nav items.
- * (Also called internally by navigateTo.)
- */
-function updateNavActive(view) {
-  document.querySelectorAll('[data-nav]').forEach(el => {
-    el.classList.toggle('active', el.dataset.nav === view);
-  });
-  document.querySelectorAll('[data-bottom-nav]').forEach(el => {
-    el.classList.toggle('active', el.dataset.bottomNav === view);
-  });
-}
 
 /* ═══════════════════════════════════════════════════════════════
    QUICK GUIDE / ONBOARDING MODAL FUNCTIONS

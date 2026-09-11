@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="คลัง AI Prompt สำหรับศึกษานิเทศก์ทุกสังกัด — ผู้นำทางวิชาการ · โค้ชกัลยาณมิตร · วิจัยและประเมินเชิงระบบ" />
+  <title>AI Prompt ศึกษานิเทศก์ (ทุกสังกัด)</title>
+  <!-- Google Fonts — async -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Kanit:wght@600;700;800&display=swap"
+    onload="this.onload=null;this.rel='stylesheet'" />
+  <noscript>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=Kanit:wght@600;700;800&display=swap" />
+  </noscript>
+  <link rel="stylesheet" href="style.css?v=1.0.0" />
+</head>
+<body class="light-mode">
+
+<header id="main-header">
+  <div class="header-inner">
+    <a href="#" class="logo" onclick="navigateTo('home');return false;">
+      <span class="logo-icon">🏛️</span>
+      <div class="logo-text">
+        <span class="logo-title">AI Prompt</span>
+        <span class="logo-sub">ศึกษานิเทศก์ (ทุกสังกัด)</span>
+      </div>
+    </a>
+    <div class="search-wrap" id="header-search-wrap">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="search" id="search-input" name="search_prompt" placeholder="ค้นหาตามภารกิจนิเทศ... เช่น วินิจฉัยผลสอบ, โค้ชครู, วPA ศน." autocomplete="off" autocorrect="off" spellcheck="false" />
+        <button class="search-clear" id="search-clear" title="ล้าง">✕</button>
+      </div>
+      <div id="search-suggestions" class="search-suggestions hidden"></div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-guide-header" onclick="openGuideModal()" title="วิธีใช้งาน 3 ขั้นตอน">
+        <span class="guide-icon">💡</span>
+        <span class="guide-text">วิธีใช้</span>
+      </button>
+      <button class="btn-icon" id="theme-toggle" title="เปลี่ยนธีม" aria-label="Toggle dark mode">🌙</button>
+      <button class="btn-icon" id="favorites-btn" title="รายการโปรด" onclick="navigateTo('favorites')">
+        ⭐ <span class="badge" id="fav-count">0</span>
+      </button>
+      <div class="user-menu" id="user-menu">
+        <button class="btn-login" id="login-btn" onclick="openAuthModal('login')">เข้าสู่ระบบ</button>
+        <div class="user-avatar hidden" id="user-avatar-wrap">
+          <button class="avatar-btn" id="avatar-btn" onclick="toggleUserDropdown(event)">
+            <span class="avatar-initials" id="avatar-initials">ศ</span>
+          </button>
+          <div class="user-dropdown hidden" id="user-dropdown">
+            <div class="dropdown-header">
+              <span id="dropdown-name">ศึกษานิเทศก์</span>
+              <span id="dropdown-email" class="text-muted"></span>
+            </div>
+            <hr/>
+            <button onclick="navigateTo('dashboard')">📊 สถิติของฉัน</button>
+            <button onclick="navigateTo('favorites')">⭐ รายการโปรด</button>
+            <button onclick="navigateTo('profile')">👤 โปรไฟล์</button>
+            <hr/>
+            <button onclick="signOut()" class="danger">ออกจากระบบ</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar">
+    <nav class="sidebar-nav">
+      <h3 class="nav-section-label">เสาหลักงานนิเทศ</h3>
+      <button class="nav-item active" data-filter="all" onclick="filterByBook(null)">
+        <span>🏛️</span> ทั้งหมด <span class="chip" id="total-count">315</span>
+      </button>
+      
+      <!-- Pillar 1 -->
+      <div class="nav-book" data-book="1">
+        <button class="nav-item nav-book-header" onclick="toggleBook(1)">
+          <span>🏛️</span>
+          <span class="nav-book-label">เสา 1: วินิจฉัย & แผน</span>
+          <span class="chip blue">75</span>
+          <span class="chevron">▸</span>
+        </button>
+        <div class="nav-chapters" id="chapters-1" style="display:none">
+          <button class="nav-chapter" onclick="filterByChapter(1,1)">บทที่ 1: รู้จัก AI & Framework <span class="chip">10</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(1,2)">บทที่ 2: วินิจฉัยผลสอบ (NT/O-NET/PISA) <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(1,3)">บทที่ 3: สังเคราะห์ SAR & สมศ. <span class="chip">15</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(1,4)">บทที่ 4: แผนนิเทศ 4 ไตรมาส & Zoning <span class="chip">15</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(1,5)">บทที่ 5: ยกร่างโครงการนิเทศ 10 หัวข้อ <span class="chip">15</span></button>
+        </div>
+      </div>
+
+      <!-- Pillar 2 -->
+      <div class="nav-book" data-book="2">
+        <button class="nav-item nav-book-header" onclick="toggleBook(2)">
+          <span>🤝</span>
+          <span class="nav-book-label">เสา 2: นิเทศ & Coaching</span>
+          <span class="chip" style="background:#F0FDFA;color:#0D9488">80</span>
+          <span class="chevron">▸</span>
+        </button>
+        <div class="nav-chapters" id="chapters-2" style="display:none">
+          <button class="nav-chapter" onclick="filterByChapter(2,1)">บทที่ 1: นิเทศคลินิกครบวงจร <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(2,2)">บทที่ 2: โค้ชครูแบบไม่ตัดสิน (GROWTH) <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(2,3)">บทที่ 3: นิเทศ Active Learning & สมรรถนะ <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(2,4)">บทที่ 4: PLC เครือข่าย & Lesson Study <span class="chip">20</span></button>
+        </div>
+      </div>
+
+      <!-- Pillar 3 -->
+      <div class="nav-book" data-book="3">
+        <button class="nav-item nav-book-header" onclick="toggleBook(3)">
+          <span>📊</span>
+          <span class="nav-book-label">เสา 3: เครื่องมือ & วิจัย</span>
+          <span class="chip" style="background:#FFFBEB;color:#D97706">80</span>
+          <span class="chevron">▸</span>
+        </button>
+        <div class="nav-chapters" id="chapters-3" style="display:none">
+          <button class="nav-chapter" onclick="filterByChapter(3,1)">บทที่ 1: สร้าง & พัฒนาเครื่องมือนิเทศ <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(3,2)">บทที่ 2: ระเบียบวิธีวิจัย & R&D <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(3,3)">บทที่ 3: วิเคราะห์ข้อมูลสถิติ & คุณภาพ <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(3,4)">บทที่ 4: ประเมินโครงการ & วิจัย 5 บท <span class="chip">20</span></button>
+        </div>
+      </div>
+
+      <!-- Pillar 4 -->
+      <div class="nav-book" data-book="4">
+        <button class="nav-item nav-book-header" onclick="toggleBook(4)">
+          <span>🎖️</span>
+          <span class="nav-book-label">เสา 4: วPA & วิชาชีพ</span>
+          <span class="chip purple">80</span>
+          <span class="chevron">▸</span>
+        </button>
+        <div class="nav-chapters" id="chapters-4" style="display:none">
+          <button class="nav-chapter" onclick="filterByChapter(4,1)">บทที่ 1: ข้อตกลง วPA 3 ด้าน 8 ตัวชี้วัด <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(4,2)">บทที่ 2: ประเด็นท้าทายตามระดับวิทยฐานะ <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(4,3)">บทที่ 3: การประเมิน PA & SAR ศน. <span class="chip">20</span></button>
+          <button class="nav-chapter" onclick="filterByChapter(4,4)">บทที่ 4: นิเทศเฉพาะสังกัด & เครือข่าย <span class="chip">20</span></button>
+        </div>
+      </div>
+
+      <hr class="sidebar-divider" />
+      <h3 class="nav-section-label">เข้าถึงด่วน</h3>
+      <button class="nav-item nav-guide-item" onclick="openGuideModal()">💡 วิธีใช้งาน (3 ขั้นตอน)</button>
+      <button class="nav-item" onclick="filterMaster()">⭐ Master Prompts</button>
+      <button class="nav-item" onclick="navigateTo('dashboard')">📊 สถิติการใช้งาน</button>
+    </nav>
+  </aside>
+
+  <main class="main-content" id="main-content">
+    <div id="view-home" class="view active">
+      <section class="hero">
+        <div class="hero-stats">
+          <div class="stat-card"><div class="stat-num">315+</div><div class="stat-label">Prompts คัดสรร</div></div>
+          <div class="stat-card"><div class="stat-num">4</div><div class="stat-label">เสาหลักงานนิเทศ</div></div>
+          <div class="stat-card"><div class="stat-num">8</div><div class="stat-label">หมวดภารกิจ</div></div>
+          <div class="stat-card"><div class="stat-num">ทุกสังกัด</div><div class="stat-label">สพฐ./สช./อปท./สอศ.</div></div>
+        </div>
+
+        <!-- Quick Guide Banner -->
+        <div class="guide-banner" onclick="openGuideModal()">
+          <div class="guide-banner-left">
+            <span class="guide-banner-badge">💡 แนะนำเริ่มต้น</span>
+            <span class="guide-banner-title">เปิด Session ใหม่ใน AI ให้คัดลอก <strong>Prompt 1.1 Master Context ศึกษานิเทศก์</strong> ไปวางก่อนเสมอ!</span>
+          </div>
+          <button class="guide-banner-btn" onclick="event.stopPropagation(); openGuideModal()">ดู 3 ขั้นตอน →</button>
+        </div>
+
+        <div class="situation-bar">
+          <span class="situation-label">🎯 เลือกตามภารกิจนิเทศ:</span>
+          <button class="situation-btn active" onclick="filterBySituation('all')">ทั้งหมด</button>
+          <button class="situation-btn blue" onclick="filterBySituation('วางแผน')">🏛️ วิเคราะห์ & แผนนิเทศ</button>
+          <button class="situation-btn" style="border-color:rgba(13,148,136,0.3);color:#0D9488" onclick="filterBySituation('โค้ชชิ่ง')">🤝 นิเทศคลินิก & Coaching</button>
+          <button class="situation-btn" style="border-color:rgba(217,119,6,0.3);color:#D97706" onclick="filterBySituation('เครื่องมือ')">📊 เครื่องมือนิเทศ & วิจัย</button>
+          <button class="situation-btn purple" onclick="filterBySituation('วPA-ศน.')">🎖️ วPA ศน. & วิชาชีพ</button>
+        </div>
+        <div class="tags-bar" id="tags-bar"></div>
+      </section>
+
+      <div class="filter-bar">
+        <div class="filter-left">
+          <span class="result-count" id="result-count">แสดงทั้งหมด <strong>315</strong> Prompts</span>
+        </div>
+        <div class="filter-right">
+          <label class="sort-label">เรียงตาม:</label>
+          <select id="sort-select" onchange="applySortAndFilter()">
+            <option value="default">ค่าเริ่มต้น</option>
+            <option value="az">ชื่อ A-Z</option>
+            <option value="popular">ยอดนิยม</option>
+          </select>
+          <button class="view-toggle" id="view-grid-btn" onclick="setView('grid')" title="กริด">⊞</button>
+          <button class="view-toggle" id="view-list-btn" onclick="setView('list')" title="รายการ">☰</button>
+        </div>
+      </div>
+
+      <div class="prompts-grid" id="prompts-grid">
+        <div class="loading-spinner" id="loading-spinner">
+          <div class="spinner"></div>
+          <p>กำลังโหลด Prompts งานนิเทศ...</p>
+        </div>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+    <div id="view-favorites" class="view hidden">
+      <div class="view-header"><h2>⭐ รายการโปรดของฉัน</h2><p class="text-muted">Prompt ที่บันทึกไว้ เข้าถึงได้รวดเร็ว</p></div>
+      <div class="prompts-grid" id="fav-grid"></div>
+      <div class="empty-state hidden" id="fav-empty">
+        <div class="empty-icon">⭐</div>
+        <h3>ยังไม่มีรายการโปรด</h3>
+        <p>กดไอคอน ⭐ บน Prompt ที่ชอบเพื่อบันทึกไว้ที่นี่</p>
+        <button class="btn-primary" onclick="navigateTo('home')">เลือก Prompt</button>
+      </div>
+    </div>
+
+    <div id="view-dashboard" class="view hidden">
+      <div class="view-header"><h2>📊 สถิติการใช้งาน</h2></div>
+      <div id="dashboard-guest" class="dashboard-guest">
+        <div class="guest-card">
+          <div class="guest-icon">📊</div>
+          <h3>ติดตามสถิติการใช้งานของคุณ</h3>
+          <p>สมัครสมาชิกฟรีเพื่อดูจำนวนครั้งที่คัดลอก Prompt, การเข้าใช้งานต่อเนื่อง (Streak) และประวัติ Prompt ที่ใช้งานบ่อย</p>
+          <button class="btn-primary" onclick="openAuthModal('signup')">สมัครสมาชิกฟรี</button>
+        </div>
+      </div>
+      <div id="dashboard-member" class="dashboard-member hidden">
+        <div class="stats-cards">
+          <div class="dash-card"><div class="dash-num" id="stat-total">0</div><div class="dash-label">Prompt ที่คัดลอกทั้งหมด</div></div>
+          <div class="dash-card"><div class="dash-num" id="stat-unique">0</div><div class="dash-label">Prompt ไม่ซ้ำกัน</div></div>
+          <div class="dash-card"><div class="dash-num" id="stat-streak">0</div><div class="dash-label">วันใช้งานต่อเนื่อง 🔥</div></div>
+        </div>
+        <div class="dash-section">
+          <h3>🕒 ประวัติการใช้งานล่าสุด</h3>
+          <div class="history-list" id="history-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-profile" class="view hidden">
+      <div class="view-header"><h2>👤 โปรไฟล์ศึกษานิเทศก์</h2></div>
+      <div class="profile-card">
+        <div class="profile-avatar"><span id="profile-initials">ศ</span></div>
+        <div class="profile-info">
+          <h3 id="profile-name">ศึกษานิเทศก์</h3>
+          <p id="profile-email" class="text-muted"></p>
+          <span class="role-badge">ศึกษานิเทศก์</span>
+        </div>
+        <div class="profile-actions">
+          <button class="btn-secondary" onclick="signOut()">ออกจากระบบ</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- PROMPT DETAIL MODAL -->
+<div class="modal-overlay hidden" id="modal-overlay" onclick="closeModal(event)">
+  <div class="modal prompt-modal" id="prompt-modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-header">
+      <div class="modal-badges">
+        <span class="chip" id="modal-book-badge"></span>
+        <span class="chip" id="modal-chapter-badge"></span>
+        <span class="chip master hidden" id="modal-master-badge">⭐ MASTER</span>
+      </div>
+      <h2 id="modal-title"></h2>
+      <div class="modal-tags" id="modal-tags"></div>
+    </div>
+    <div class="modal-body">
+      <div class="tip-box" id="modal-tip-box">
+        <span class="tip-icon">💡</span>
+        <div id="modal-tip"></div>
+      </div>
+      <div class="customize-box" id="modal-customize-box">
+        <span class="customize-label">🔧 จุดที่ต้องปรับแต่ง:</span>
+        <div id="modal-customize"></div>
+      </div>
+      <div class="prompt-box">
+        <div class="prompt-box-header">
+          <span>เนื้อหา Prompt</span>
+          <button class="copy-btn-inner" id="modal-copy-btn" onclick="copyModalPrompt()">
+            📋 คัดลอก Prompt
+          </button>
+        </div>
+        <pre id="modal-content" class="prompt-content"></pre>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div class="llm-buttons">
+        <span class="llm-label">เปิดใน:</span>
+        <button class="btn-llm claude" onclick="openInLLM('claude')" title="เปิดใน Claude">
+          <span>🟣</span> Claude
+        </button>
+        <button class="btn-llm chatgpt" onclick="openInLLM('chatgpt')" title="เปิดใน ChatGPT">
+          <span>🟢</span> ChatGPT
+        </button>
+        <button class="btn-llm gemini" onclick="openInLLM('gemini')" title="เปิดใน Gemini">
+          <span>🔵</span> Gemini
+        </button>
+      </div>
+      <div class="modal-actions-right">
+        <button class="btn-icon" id="modal-fav-btn" onclick="toggleModalFav()" title="บันทึกรายการโปรด">⭐</button>
+        <button class="btn-icon" onclick="shareCurrentPrompt()" title="แชร์">🔗</button>
+        <button class="btn-primary" onclick="copyModalPrompt()">📋 คัดลอก</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK GUIDE ONBOARDING MODAL -->
+<div class="modal-overlay hidden" id="guide-modal-overlay" onclick="closeGuideModal(event)">
+  <div class="modal guide-modal" id="guide-modal">
+    <button class="modal-close" onclick="closeGuideModal()">✕</button>
+    <div class="guide-modal-header">
+      <div class="guide-modal-icon">🏛️</div>
+      <h2>วิธีใช้งานใน 3 ขั้นตอน</h2>
+      <p class="text-muted">สำหรับศึกษานิเทศก์ทุกสังกัด เพื่อผลลัพธ์ที่ตรงบริบทงานนิเทศที่สุด</p>
+    </div>
+    <div class="guide-modal-body">
+      <!-- Step 1 -->
+      <div class="guide-step-card highlight">
+        <div class="guide-step-badge">1</div>
+        <div class="guide-step-content">
+          <div class="guide-step-title">
+            <span>🏛️ คัดลอก Master Context (Prompt 1.1) เป็นข้อความแรกเสมอ</span>
+            <span class="guide-badge-important">สำคัญที่สุด ⭐</span>
+          </div>
+          <p class="guide-step-desc">
+            ในทุก Session การทำงานกับ AI (Claude, ChatGPT หรือ Gemini) ให้คัดลอก 
+            <strong>Prompt 1.1 Master Context ศึกษานิเทศก์</strong> ไปวางในห้องแชทก่อนเสมอ เพื่อกำหนดบทบาทผู้เชี่ยวชาญการนิเทศ และบริบทเขตพื้นที่/สังกัดของท่าน
+          </p>
+          <div class="guide-master-preview">
+            <code>คุณคือผู้เชี่ยวชาญด้านการนิเทศการศึกษา... สังกัด: [สพฐ./สช./อปท./...] เขตพื้นที่: [...]</code>
+          </div>
+          <div class="guide-step-actions">
+            <button class="btn-primary btn-sm" onclick="copyPromptAndCloseGuide()">
+              📋 คัดลอก Prompt 1.1 ทันที
+            </button>
+            <button class="btn-ghost btn-sm" onclick="openPrompt11Details()">
+              🔍 ดูเนื้อหาฉบับเต็ม
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="guide-step-card">
+        <div class="guide-step-badge">2</div>
+        <div class="guide-step-content">
+          <div class="guide-step-title">
+            <span>✏️ ปรับแต่งข้อความใน [วงเล็บ]</span>
+          </div>
+          <p class="guide-step-desc">
+            ใน Prompt จะมีข้อความในเครื่องหมาย <code class="code-bracket">[...]</code> เช่น 
+            <code>[สังกัด]</code>, <code>[เขตพื้นที่]</code>, <code>[กลุ่มโรงเรียนเป้าหมาย]</code> ให้ท่านแก้ไขเป็นข้อมูลจริงของเขตพื้นที่ตนเอง
+          </p>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="guide-step-card">
+        <div class="guide-step-badge">3</div>
+        <div class="guide-step-content">
+          <div class="guide-step-title">
+            <span>🚀 เลือก Prompt ตามภารกิจนิเทศ แล้วสั่งต่อได้เลย</span>
+          </div>
+          <p class="guide-step-desc">
+            เลือกค้นหา Prompt จาก 4 เสาหลักตามภารกิจที่ต้องการ นำไปวางต่อในห้องแชทเดิมได้ทันที:
+          </p>
+          <div class="guide-books-mini">
+            <div class="mini-book b1">🏛️ <strong>เสา 1</strong> วินิจฉัยผลสัมฤทธิ์ (NT/O-NET/PISA) / SAR / แผนนิเทศบูรณาการ</div>
+            <div class="mini-book b2">🤝 <strong>เสา 2</strong> นิเทศคลินิก / สะท้อนคิด / โค้ชชิ่งแบบกัลยาณมิตร / ขับเคลื่อน PLC</div>
+            <div class="mini-book b3">📊 <strong>เสา 3</strong> แบบสังเกตชั้นเรียน / เกณฑ์รูบริกส์แผนสมรรถนะ / วิจัย R&D การนิเทศ</div>
+            <div class="mini-book b4">🎖️ <strong>เสา 4</strong> ข้อตกลง วPA ศึกษานิเทศก์ (ว10/2564) / ประเด็นท้าทายระดับเขต</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="guide-modal-footer">
+      <label class="guide-dismiss-label">
+        <input type="checkbox" id="guide-dont-show-again" />
+        <span>ไม่ต้องแสดงคำแนะนำนี้อัตโนมัติอีก</span>
+      </label>
+      <div class="guide-footer-btns">
+        <button class="btn-primary" onclick="copyPromptAndCloseGuide()">
+          📋 คัดลอก Prompt 1.1 แล้วเริ่มใช้งาน
+        </button>
+        <button class="btn-secondary" onclick="closeGuideModal()">
+          เข้าใจแล้ว
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="modal-overlay hidden" id="auth-modal-overlay" onclick="closeAuthModal(event)">
+  <div class="modal auth-modal" id="auth-modal">
+    <button class="modal-close" onclick="closeAuthModal()">✕</button>
+    <div id="auth-login" class="auth-panel active">
+      <div class="auth-header"><div class="auth-logo">🏛️</div><h2>เข้าสู่ระบบ</h2><p>AI Prompt ศึกษานิเทศก์</p></div>
+      <div class="form-group"><label>อีเมล</label><input type="email" id="login-email" placeholder="your@email.com" /></div>
+      <div class="form-group"><label>รหัสผ่าน</label><input type="password" id="login-password" placeholder="••••••••" /></div>
+      <div id="login-error" class="auth-error hidden"></div>
+      <button class="btn-primary full" onclick="signIn()">เข้าสู่ระบบ</button>
+      <div class="auth-divider"><span>หรือ</span></div>
+      <button class="btn-google full" onclick="signInWithGoogle()"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G" /> เข้าสู่ระบบด้วย Google</button>
+      <p class="auth-switch">ยังไม่มีบัญชี? <a href="#" onclick="switchAuthPanel('signup');return false;">สมัครสมาชิกฟรี</a></p>
+    </div>
+    <div id="auth-signup" class="auth-panel hidden">
+      <div class="auth-header"><div class="auth-logo">🏛️</div><h2>สมัครสมาชิกฟรี</h2><p>ติดตามสถิติ บันทึกโปรด</p></div>
+      <div class="form-group"><label>ชื่อที่แสดง</label><input type="text" id="signup-name" placeholder="ศน. ชื่อ-นามสกุล" /></div>
+      <div class="form-group"><label>อีเมล</label><input type="email" id="signup-email" placeholder="your@email.com" /></div>
+      <div class="form-group"><label>รหัสผ่าน</label><input type="password" id="signup-password" placeholder="อย่างน้อย 6 ตัวอักษร" /></div>
+      <div id="signup-error" class="auth-error hidden"></div>
+      <button class="btn-primary full" onclick="signUp()">สมัครสมาชิก</button>
+      <div class="auth-divider"><span>หรือ</span></div>
+      <button class="btn-google full" onclick="signInWithGoogle()"><img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G" /> สมัครด้วย Google</button>
+      <p class="auth-switch">มีบัญชีแล้ว? <a href="#" onclick="switchAuthPanel('login');return false;">เข้าสู่ระบบ</a></p>
+    </div>
+    <div id="auth-reset" class="auth-panel hidden">
+      <div class="auth-header"><h2>รีเซ็ตรหัสผ่าน</h2></div>
+      <div class="form-group"><label>อีเมล</label><input type="email" id="reset-email" placeholder="your@email.com" /></div>
+      <div id="reset-msg" class="auth-success hidden"></div>
+      <button class="btn-primary full" onclick="resetPassword()">ส่งลิงก์รีเซ็ต</button>
+      <p class="auth-switch"><a href="#" onclick="switchAuthPanel('login');return false;">← กลับ</a></p>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+<div class="mobile-search-overlay hidden" id="mobile-search-overlay">
+  <div class="mobile-search-inner">
+    <input type="text" id="mobile-search-input" placeholder="ค้นหา Prompt งานนิเทศ..." autocomplete="off" />
+    <button onclick="closeMobileSearch()">ยกเลิก</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="data/prompts.js?v=1.0.0"></script>
+<script src="config.js?v=1.0.0"></script>
+<script src="access.js?v=1.0.0"></script>
+<script src="app.js?v=1.0.0"></script>
+<script>
+  // Fallback direct event handling for guide triggers
+  document.addEventListener('click', function(e) {
+    var trigger = e.target.closest('.btn-guide-header, .guide-banner, .guide-banner-btn, .nav-guide-item');
+    if (trigger) {
+      e.preventDefault();
+      if (typeof window.openGuideModal === 'function') {
+        window.openGuideModal();
+      } else {
+        var ov = document.getElementById('guide-modal-overlay');
+        if (ov) {
+          ov.classList.remove('hidden');
+          ov.style.display = 'flex';
+        }
+      }
+    }
+  });
+</script>
+</body>
+</html>

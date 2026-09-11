@@ -1426,6 +1426,12 @@ function updateProfileUI(user) {
     if (dropdownName) dropdownName.textContent = displayName;
     if (dropdownEmail) dropdownEmail.textContent = email;
     if (userName) userName.textContent = displayName;
+    const profName = document.getElementById('profile-name');
+    if (profName) profName.textContent = displayName;
+    const profEmail = document.getElementById('profile-email');
+    if (profEmail) profEmail.textContent = email;
+    const profInitials = document.getElementById('profile-initials');
+    if (profInitials) profInitials.textContent = initial;
     if (logoutBtn) logoutBtn.classList.remove('hidden');
   } else {
     // Logged out: Show login button, hide avatar
@@ -1624,7 +1630,7 @@ function updateSidebarActive() {
 ═══════════════════════════════════════════════════════════════ */
 async function loadDashboard() {
   const guestEl = document.getElementById('dashboard-guest');
-  const userEl  = document.getElementById('dashboard-user');
+  const userEl  = document.getElementById('dashboard-member') || document.getElementById('dashboard-user');
 
   if (!state.user) {
     if (guestEl) guestEl.classList.remove('hidden');
@@ -1700,13 +1706,14 @@ async function loadDashboard() {
       if (p && p.book) booksSet.add(p.book);
     });
   }
-  const booksUsedStr = `${booksSet.size}/3`;
+  const booksUsedStr = `${booksSet.size}/4`;
 
   // วันที่ใช้งานต่อเนื่อง (Streak)
   const streakDays = calculateUsageStreak(userEvents.length > 0 ? userEvents : localHist);
 
   // 4. แสดงผลตัวเลขใน Card สถิติทั้ง 4 ตัว (ตรงตาม ID ใน index.html)
   setDashboardStat('stat-total-copies', totalCopies);
+  setDashboardStat('stat-total',        totalCopies);
   setDashboardStat('stat-favorites',    totalFavs);
   setDashboardStat('stat-streak',       streakDays > 0 ? `${streakDays} วัน` : '0 วัน');
   setDashboardStat('stat-books',        booksUsedStr);

@@ -225,14 +225,37 @@
         </div>
       </div>
       <div id="dashboard-member" class="dashboard-member hidden">
-        <div class="stats-cards">
-          <div class="dash-card"><div class="dash-num" id="stat-total">0</div><div class="dash-label">Prompt ที่คัดลอกทั้งหมด</div></div>
-          <div class="dash-card"><div class="dash-num" id="stat-unique">0</div><div class="dash-label">Prompt ไม่ซ้ำกัน</div></div>
-          <div class="dash-card"><div class="dash-num" id="stat-streak">0</div><div class="dash-label">วันใช้งานต่อเนื่อง 🔥</div></div>
+        <div class="dashboard-grid">
+          <div class="dashboard-card">
+            <div class="d-card-icon">📋</div>
+            <div class="d-card-num" id="stat-total-copies">0</div>
+            <div class="d-card-label">Prompt ที่คัดลอกทั้งหมด</div>
+          </div>
+          <div class="dashboard-card">
+            <div class="d-card-icon">⭐</div>
+            <div class="d-card-num" id="stat-favorites">0</div>
+            <div class="d-card-label">รายการโปรดที่บันทึก</div>
+          </div>
+          <div class="dashboard-card">
+            <div class="d-card-icon">🔥</div>
+            <div class="d-card-num" id="stat-streak">0 วัน</div>
+            <div class="d-card-label">วันใช้งานต่อเนื่อง</div>
+          </div>
+          <div class="dashboard-card">
+            <div class="d-card-icon">📚</div>
+            <div class="d-card-num" id="stat-books">0/4</div>
+            <div class="d-card-label">หมวดเล่มที่ใช้งาน</div>
+          </div>
         </div>
-        <div class="dash-section">
+
+        <div class="dashboard-section">
+          <h3>⭐ 5 อันดับ Prompts ที่คุณใช้งานบ่อยที่สุด</h3>
+          <div id="top-prompts-list"></div>
+        </div>
+
+        <div class="dashboard-section">
           <h3>🕒 ประวัติการใช้งานล่าสุด</h3>
-          <div class="history-list" id="history-list"></div>
+          <div id="usage-history"></div>
         </div>
       </div>
     </div>

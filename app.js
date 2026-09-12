@@ -567,14 +567,21 @@ function goToPage(page) {
 ═══════════════════════════════════════════════════════════════ */
 async function copyPrompt(promptId) {
   const p = PROMPTS_DATA.find(x => x.id === promptId);
-  if (!p) return;
+  if (!p) return false;
 
-  // Access check — MODE B/C gates copy action
+  // Access check — ตรวจสอบสิทธิ์ (ผู้เยี่ยมชมทดลองคัดลอกได้ 3 ครั้ง, สมาชิกไม่จำกัด)
   if (typeof checkCopyAccess === 'function') {
-    checkCopyAccess(promptId, () => _doCopyPrompt(p));
-    return;
+    return new Promise((resolve) => {
+      checkCopyAccess(promptId, async () => {
+        await _doCopyPrompt(p);
+        resolve(true);
+      }, () => {
+        resolve(false);
+      });
+    });
   }
   await _doCopyPrompt(p);
+  return true;
 }
 
 async function _doCopyPrompt(p) {
@@ -629,7 +636,19 @@ async function _doCopyPrompt(p) {
     });
   }
 
-  showToast('คัดลอก Prompt แล้ว! วางใน Claude, ChatGPT หรือ Gemini ได้เลย', 'success');
+  // Toast feedback
+  if (state.user) {
+    showToast('คัดลอก Prompt แล้ว! วางใน Claude, ChatGPT หรือ Gemini ได้เลย', 'success');
+  } else {
+    const count = (typeof getGuestCopyCount === 'function') ? getGuestCopyCount() : 0;
+    const remaining = Math.max(0, 3 - count);
+    if (remaining > 0) {
+      showToast(`คัดลอกสำเร็จ! (สิทธิ์ทดลองเหลือ ${remaining} ครั้ง • สมัครสมาชิกฟรีเพื่อใช้ไม่จำกัด)`, 'success');
+    } else {
+      showToast('คัดลอกสำเร็จ! (คุณใช้สิทธิ์ทดลองครบ 3 ครั้งแล้ว กรุณาสมัครสมาชิกฟรีเพื่อใช้งานไม่จำกัด)', 'info');
+    }
+  }
+
   if (state.currentView === 'dashboard') loadDashboard();
   if (typeof updateAccessIndicator === 'function') updateAccessIndicator();
 }
@@ -892,17 +911,19 @@ function setModalField(id, text) {
 
 async function copyModalPrompt() {
   if (!state.currentPrompt) return;
-  await copyPrompt(state.currentPrompt.id);
-  const btns = document.querySelectorAll('#modal-copy-btn, .modal-footer .btn-primary');
-  btns.forEach(btn => {
-    const original = btn.innerHTML;
-    btn.innerHTML = '✅ คัดลอกแล้ว!';
-    btn.classList.add('copied');
-    setTimeout(() => {
-      btn.innerHTML = original;
-      btn.classList.remove('copied');
-    }, 2000);
-  });
+  const copied = await copyPrompt(state.currentPrompt.id);
+  if (copied) {
+    const btns = document.querySelectorAll('#modal-copy-btn, .modal-footer .btn-primary');
+    btns.forEach(btn => {
+      const original = btn.innerHTML;
+      btn.innerHTML = '✅ คัดลอกแล้ว!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.innerHTML = original;
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
 }
 
 function toggleModalFav() {
@@ -945,12 +966,13 @@ async function shareCurrentPrompt() {
   }
 }
 
-function openInLLM(llm) {
+async function openInLLM(llm) {
   if (!state.currentPrompt) return;
   const promptText = state.currentPrompt.content || state.currentPrompt.prompt || '';
   
-  // Copy to clipboard first
-  copyPrompt(state.currentPrompt.id);
+  // Copy to clipboard first (check access)
+  const copied = await copyPrompt(state.currentPrompt.id);
+  if (!copied) return;
 
   let url = '';
   if (llm === 'claude') {
@@ -1387,6 +1409,7 @@ async function resetPassword() {
 }
 
 function openAuthModal(panel = 'login') {
+  if (typeof closeCopyGateModal === 'function') closeCopyGateModal(null, true);
   const overlay = document.getElementById('auth-modal-overlay');
   if (overlay) overlay.classList.remove('hidden');
   switchAuthPanel(panel);
@@ -2016,6 +2039,7 @@ function setupEventListeners() {
     if (e.key === 'Escape') {
       closePromptModalForce();
       closeAuthModal(null, true);
+      if (typeof closeCopyGateModal === 'function') closeCopyGateModal(null, true);
       closeMobileSearch();
     }
   });
@@ -2067,17 +2091,18 @@ function closeMobileSearch() {
 async function copyPromptFromModal() {
   if (!state.currentPrompt) return;
 
-  await copyPrompt(state.currentPrompt.id);
-
-  const btn = document.getElementById('modal-copy-btn');
-  if (btn) {
-    const original = btn.textContent;
-    btn.textContent = '✅ คัดลอกแล้ว!';
-    btn.classList.add('copied');
-    setTimeout(() => {
-      btn.textContent = original;
-      btn.classList.remove('copied');
-    }, 2000);
+  const copied = await copyPrompt(state.currentPrompt.id);
+  if (copied) {
+    const btn = document.getElementById('modal-copy-btn');
+    if (btn) {
+      const original = btn.textContent;
+      btn.textContent = '✅ คัดลอกแล้ว!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.classList.remove('copied');
+      }, 2000);
+    }
   }
 }
 
@@ -2161,8 +2186,8 @@ function closeGuideModal(event) {
 }
 
 async function copyMasterContextPrompt(btnEl) {
-  await copyPrompt('b1_1_1');
-  if (btnEl) {
+  const copied = await copyPrompt('b1_1_1');
+  if (copied && btnEl) {
     const originalText = btnEl.textContent;
     btnEl.textContent = '✅ คัดลอกสำเร็จ!';
     btnEl.classList.add('copied');
@@ -2174,15 +2199,17 @@ async function copyMasterContextPrompt(btnEl) {
 }
 
 async function copyPromptAndCloseGuide() {
-  const chk = document.getElementById('guide-dont-show-again');
-  if (chk && chk.checked) {
-    localStorage.setItem('ai_supervisor_guide_dismissed', '1');
-  }
-  await copyPrompt('b1_1_1');
-  const overlay = document.getElementById('guide-modal-overlay');
-  if (overlay) {
-    overlay.classList.add('hidden');
-    overlay.style.display = 'none';
+  const copied = await copyPrompt('b1_1_1');
+  if (copied) {
+    const chk = document.getElementById('guide-dont-show-again');
+    if (chk && chk.checked) {
+      localStorage.setItem('ai_supervisor_guide_dismissed', '1');
+    }
+    const overlay = document.getElementById('guide-modal-overlay');
+    if (overlay) {
+      overlay.classList.add('hidden');
+      overlay.style.display = 'none';
+    }
   }
 }
 
@@ -2200,6 +2227,8 @@ window.openPromptModal = openPromptModal;
 window.closeModal = closeModal;
 window.closePromptModal = closePromptModal;
 window.closePromptModalForce = closePromptModalForce;
+window.openCopyGateModal = (typeof openCopyGateModal === 'function') ? openCopyGateModal : function() {};
+window.closeCopyGateModal = (typeof closeCopyGateModal === 'function') ? closeCopyGateModal : function() {};
 window.copyModalPrompt = copyModalPrompt;
 window.copyPromptFromModal = copyModalPrompt;
 window.toggleModalFav = toggleModalFav;

@@ -20,17 +20,12 @@ const SUPABASE_CONFIG = {
 // ACCESS CONTROL — ระบบควบคุมการเข้าถึง
 // ============================================================
 const ACCESS_CONFIG = {
-  // MODE A: 'open' — ทุกคนใช้งานและคัดลอกได้ฟรี สมาชิกได้ระบบสถิติและซิงก์รายการโปรด [ค่าเริ่มต้น]
-  // MODE B: 'copy_requires_login' — ดู/ค้นหาได้ฟรี แต่ต้องล็อกอินเพื่อคัดลอก
-  // MODE C: 'login_required' — ต้องล็อกอินก่อนเข้าชมเนื้อหาทั้งหมด
-  mode: 'open',
-
-  freeCopiesPerDay: 5,
+  // สิทธิ์การใช้งาน: ผู้เยี่ยมชม (ไม่ได้ล็อกอิน) ทดลองคัดลอกได้ 3 ครั้ง
+  // สมาชิก (ล็อกอินแล้ว): คัดลอกได้ไม่จำกัด
+  guestLimit: 3,
+  freeCopiesPerGuest: 3,
   showWelcomePopup: false,
   welcomePopupDelay: 8000,
-
-  loginWallTitle: 'เข้าสู่ระบบเพื่อใช้งาน AI Prompt ศึกษานิเทศก์',
-  loginWallSubtitle: 'สมัครสมาชิกฟรี เข้าถึงคลัง Prompts งานนิเทศ พร้อมสถิติส่วนตัว',
 };
 
 // Site configuration

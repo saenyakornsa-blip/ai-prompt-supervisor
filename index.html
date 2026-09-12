@@ -418,6 +418,38 @@
   </div>
 </div>
 
+<!-- COPY GATE / TRIAL LIMIT MODAL -->
+<div class="modal-overlay hidden" id="copy-gate-modal-overlay" onclick="closeCopyGateModal(event)">
+  <div class="modal copy-gate-modal" id="copy-gate-modal">
+    <button class="modal-close" onclick="closeCopyGateModal(null, true)">✕</button>
+    <div class="copy-gate-icon">🎁</div>
+    <h2 class="copy-gate-title">ทดลองคัดลอกครบ 3 ครั้งแล้ว</h2>
+    <p class="copy-gate-sub">
+      สิทธิ์ทดลองคัดลอกสำหรับผู้เยี่ยมชมครบ 3 ครั้งแล้ว<br>
+      <strong>สมัครสมาชิกฟรี</strong> เพื่อปลดล็อกการคัดลอก Prompt งานนิเทศกว่า 315+ รายการได้ไม่จำกัด!
+    </p>
+
+    <div class="copy-gate-benefits">
+      <span>✨ คัดลอกได้ไม่จำกัด</span>
+      <span>⭐ บันทึกรายการโปรด</span>
+      <span>📊 แดชบอร์ดสถิติการใช้งาน</span>
+      <span>🆓 ใช้งานฟรี ไม่มีค่าใช้จ่าย</span>
+    </div>
+
+    <div class="copy-gate-actions">
+      <button class="btn-primary full" onclick="closeCopyGateModal(null, true); openAuthModal('signup')">
+        🎉 สมัครสมาชิกฟรี (ไม่ถึง 1 นาที)
+      </button>
+      <button class="btn-google full" onclick="closeCopyGateModal(null, true); signInWithGoogle()">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" alt="G" /> เข้าสู่ระบบด้วย Google
+      </button>
+      <button class="btn-text" onclick="closeCopyGateModal(null, true); openAuthModal('login')">
+        มีบัญชีอยู่แล้ว? เข้าสู่ระบบ
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- AUTH MODAL -->
 <div class="modal-overlay hidden" id="auth-modal-overlay" onclick="closeAuthModal(event)">
   <div class="modal auth-modal" id="auth-modal">

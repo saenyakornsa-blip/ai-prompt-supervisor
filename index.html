@@ -277,6 +277,33 @@
   </main>
 </div>
 
+<!-- BOTTOM NAVIGATION (MOBILE) -->
+<nav class="bottom-nav" id="bottom-nav" aria-label="แถบนำทางหลักบนมือถือ">
+  <button class="bn-item active" data-bottom-nav="home" onclick="navigateTo('home')">
+    <span class="bn-icon">🏠</span>
+    <span class="bn-label">หน้าหลัก</span>
+  </button>
+  <button class="bn-item" onclick="openMobileSearch()">
+    <span class="bn-icon">🔍</span>
+    <span class="bn-label">ค้นหา</span>
+  </button>
+  <button class="bn-item" data-bottom-nav="favorites" onclick="navigateTo('favorites')">
+    <span class="bn-icon" style="position:relative;display:inline-block;">
+      ⭐
+      <span class="chip fav-count-badge hidden" style="position:absolute;top:-4px;right:-12px;font-size:10px;padding:1px 5px;border-radius:10px;background:var(--primary);color:#fff;min-width:16px;line-height:14px;text-align:center;"></span>
+    </span>
+    <span class="bn-label">โปรด</span>
+  </button>
+  <button class="bn-item" data-bottom-nav="dashboard" onclick="navigateTo('dashboard')">
+    <span class="bn-icon">📊</span>
+    <span class="bn-label">สถิติ</span>
+  </button>
+  <button class="bn-item" id="bn-profile" data-bottom-nav="profile" onclick="handleBottomNavProfile()">
+    <span class="bn-icon">👤</span>
+    <span class="bn-label" id="bn-profile-label">บัญชี</span>
+  </button>
+</nav>
+
 <!-- PROMPT DETAIL MODAL -->
 <div class="modal-overlay hidden" id="modal-overlay" onclick="closeModal(event)">
   <div class="modal prompt-modal" id="prompt-modal">

@@ -1494,6 +1494,12 @@ function updateProfileUI(user) {
     const profInitials = document.getElementById('profile-initials');
     if (profInitials) profInitials.textContent = initial;
     if (logoutBtn) logoutBtn.classList.remove('hidden');
+
+    // Update bottom nav profile
+    const bnLabel = document.getElementById('bn-profile-label');
+    if (bnLabel) bnLabel.textContent = 'โปรไฟล์';
+    const bnIcon = document.querySelector('#bn-profile .bn-icon');
+    if (bnIcon) bnIcon.textContent = initial || '👤';
   } else {
     // Logged out: Show login button, hide avatar
     if (loginBtn) loginBtn.classList.remove('hidden');
@@ -1504,6 +1510,12 @@ function updateProfileUI(user) {
     }
     if (userName) userName.textContent = 'ล็อกอินเพื่อซิงค์ข้อมูล';
     if (logoutBtn) logoutBtn.classList.add('hidden');
+
+    // Reset bottom nav profile
+    const bnLabel = document.getElementById('bn-profile-label');
+    if (bnLabel) bnLabel.textContent = 'บัญชี';
+    const bnIcon = document.querySelector('#bn-profile .bn-icon');
+    if (bnIcon) bnIcon.textContent = '👤';
   }
 }
 
@@ -2069,6 +2081,7 @@ document.addEventListener('DOMContentLoaded', init);
    24. MOBILE SEARCH
 ═══════════════════════════════════════════════════════════════ */
 function openMobileSearch() {
+  if (state.currentView !== 'home') navigateTo('home');
   const overlay = document.getElementById('mobile-search-overlay');
   if (overlay) overlay.classList.remove('hidden');
   const input = document.getElementById('mobile-search-input');
@@ -2083,6 +2096,14 @@ function openMobileSearch() {
 function closeMobileSearch() {
   const overlay = document.getElementById('mobile-search-overlay');
   if (overlay) overlay.classList.add('hidden');
+}
+
+function handleBottomNavProfile() {
+  if (state.user) {
+    navigateTo('profile');
+  } else {
+    openAuthModal('login');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -2251,5 +2272,8 @@ window.closeGuideModal = closeGuideModal;
 window.copyMasterContextPrompt = copyMasterContextPrompt;
 window.copyPromptAndCloseGuide = copyPromptAndCloseGuide;
 window.openPrompt11Details = openPrompt11Details;
+window.handleBottomNavProfile = handleBottomNavProfile;
+window.openMobileSearch = openMobileSearch;
+window.closeMobileSearch = closeMobileSearch;
 
 

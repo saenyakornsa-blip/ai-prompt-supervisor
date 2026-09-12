@@ -1106,9 +1106,11 @@ async function loadPromptFeedback(promptId) {
     if (scoreCount) scoreCount.textContent = '(0 รีวิว)';
   }
 
-  // 4. Pre-fill user's previous rating if logged in
-  if (state.user) {
-    const myReview = reviews.find(r => r.user_id === state.user.id);
+  // 4. Pre-fill user's previous rating (logged in or local guest)
+  const guestId = localStorage.getItem('ai_guest_id');
+  const currentUserId = state.user ? state.user.id : guestId;
+  if (currentUserId) {
+    const myReview = reviews.find(r => r.user_id === currentUserId);
     if (myReview) {
       selectStarRating(myReview.rating);
       if (commentInput && myReview.comment) commentInput.value = myReview.comment;
@@ -1117,11 +1119,11 @@ async function loadPromptFeedback(promptId) {
       if (btn) btn.innerHTML = '<span>✏️ อัปเดตคำแนะนำของคุณ</span>';
     } else {
       const btn = document.getElementById('btn-submit-feedback');
-      if (btn) btn.innerHTML = '<span>💬 ส่งคำแนะนำ / รีวิว</span>';
+      if (btn) btn.innerHTML = '<span>💬 ส่งคะแนน / รีวิว</span>';
     }
   } else {
     const btn = document.getElementById('btn-submit-feedback');
-    if (btn) btn.innerHTML = '<span>💬 ส่งคำแนะนำ / รีวิว</span>';
+    if (btn) btn.innerHTML = '<span>💬 ส่งคะแนน / รีวิว</span>';
   }
 
   // 5. Render reviews list
@@ -1131,7 +1133,7 @@ async function loadPromptFeedback(promptId) {
       reviewsList.innerHTML = '<div class="no-reviews">ยังไม่มีข้อเสนอแนะ เป็นคนแรกที่ให้คำแนะนำสำหรับ Prompt นี้!</div>';
     } else {
       reviewsList.innerHTML = reviewsWithComments.map(r => {
-        const author = r.user_name || 'คุณครู';
+        const author = r.user_name || 'ศึกษานิเทศก์';
         const stars = '★'.repeat(r.rating || 5) + '☆'.repeat(5 - (r.rating || 5));
         const date = r.created_at ? new Date(r.created_at).toLocaleDateString('th-TH') : '';
         return `
@@ -1157,12 +1159,6 @@ async function submitPromptFeedback() {
     return;
   }
 
-  if (!state.user) {
-    showToast('กรุณาเข้าสู่ระบบก่อนส่งคำแนะนำหรือให้คะแนนครับ', 'info');
-    openAuthModal('login');
-    return;
-  }
-
   const p = state.currentPrompt;
   if (!p) return;
 
@@ -1175,19 +1171,41 @@ async function submitPromptFeedback() {
     submitBtn.innerHTML = '<span>⏳ กำลังบันทึก...</span>';
   }
 
-  const userName = state.user.user_metadata?.display_name || state.user.email?.split('@')[0] || 'คุณครู';
+  // Determine user ID (Supabase auth or guest ID)
+  let userId;
+  if (state.user) {
+    userId = state.user.id;
+  } else {
+    let guestId = localStorage.getItem('ai_guest_id');
+    if (!guestId) {
+      guestId = 'guest_' + Math.random().toString(36).substring(2, 11);
+      localStorage.setItem('ai_guest_id', guestId);
+    }
+    userId = guestId;
+  }
+
+  // Determine reviewer display name from supervisor profile or auth
+  const profile = (typeof getSupervisorProfile === 'function') ? getSupervisorProfile() : null;
+  let userName = '';
+  if (profile && profile.name) {
+    userName = profile.area ? `${profile.name} (${profile.area})` : profile.name;
+  } else if (state.user) {
+    userName = state.user.user_metadata?.display_name || state.user.email?.split('@')[0] || 'ศึกษานิเทศก์';
+  } else {
+    userName = 'ศึกษานิเทศก์ (ทั่วไป)';
+  }
 
   const reviewObj = {
     prompt_id: p.id,
-    user_id: state.user.id,
+    user_id: userId,
     user_name: userName,
     rating: currentSelectedRating,
     comment: comment,
     created_at: new Date().toISOString()
   };
 
-  // 1. Save to Supabase
-  if (_sb) {
+  // 1. Save to Supabase if logged in
+  if (_sb && state.user) {
     try {
       const { error } = await _sb.from('prompt_ratings').upsert(reviewObj, {
         onConflict: 'user_id,prompt_id'
@@ -1200,13 +1218,13 @@ async function submitPromptFeedback() {
     }
   }
 
-  // 2. Also cache in localStorage
+  // 2. Cache in localStorage
   try {
     const key = `ai_ratings_${p.id}`;
     let cached = [];
     const raw = localStorage.getItem(key);
     if (raw) cached = JSON.parse(raw);
-    const existingIdx = cached.findIndex(r => r.user_id === state.user.id);
+    const existingIdx = cached.findIndex(r => r.user_id === userId);
     if (existingIdx >= 0) {
       cached[existingIdx] = reviewObj;
     } else {
@@ -1219,7 +1237,12 @@ async function submitPromptFeedback() {
     submitBtn.disabled = false;
   }
 
-  showToast('บันทึกคะแนนและคำแนะนำเรียบร้อยแล้ว ขอบคุณมากครับ! ⭐', 'success');
+  if (state.user) {
+    showToast('บันทึกคะแนนและคำแนะนำสู่ชุมชน ศน. เรียบร้อยแล้ว ขอบคุณมากครับ! ⭐', 'success');
+  } else {
+    showToast('บันทึกคะแนนและคำแนะนำแล้ว (เข้าสู่ระบบเพื่อแชร์กับเพื่อน ศน. ทั่วประเทศ) ⭐', 'info');
+  }
+
   loadPromptFeedback(p.id);
 }
 
@@ -2529,5 +2552,11 @@ window.updateAreaPlaceholder = updateAreaPlaceholder;
 window.updateAutofillPreview = updateAutofillPreview;
 window.applyAutoFillPlaceholders = applyAutoFillPlaceholders;
 window.getSupervisorProfile = getSupervisorProfile;
+window.selectStarRating = selectStarRating;
+window.hoverStarRating = hoverStarRating;
+window.resetStarHover = resetStarHover;
+window.updateStarUI = updateStarUI;
+window.loadPromptFeedback = loadPromptFeedback;
+window.submitPromptFeedback = submitPromptFeedback;
 
 

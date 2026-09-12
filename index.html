@@ -465,6 +465,46 @@
         </div>
         <pre id="modal-content" class="prompt-content"></pre>
       </div>
+
+      <!-- 5-STAR RATING & FEEDBACK SECTION -->
+      <div class="modal-feedback-card" id="modal-feedback-card">
+        <div class="feedback-card-header">
+          <div class="feedback-title-wrap">
+            <span>⭐</span>
+            <strong>คะแนน & ความคิดเห็นจากเพื่อน ศน.</strong>
+          </div>
+          <div class="feedback-score-badge">
+            <span class="score-num" id="modal-score-num">--</span>
+            <span class="score-stars" id="modal-score-stars">☆☆☆☆☆</span>
+            <span class="score-count" id="modal-score-count">(0 รีวิว)</span>
+          </div>
+        </div>
+
+        <div class="user-rating-box">
+          <div class="star-picker" onmouseleave="resetStarHover()">
+            <span class="star-btn" data-rating="1" onmouseover="hoverStarRating(1)" onclick="selectStarRating(1)" title="1 ดาว">★</span>
+            <span class="star-btn" data-rating="2" onmouseover="hoverStarRating(2)" onclick="selectStarRating(2)" title="2 ดาว">★</span>
+            <span class="star-btn" data-rating="3" onmouseover="hoverStarRating(3)" onclick="selectStarRating(3)" title="3 ดาว">★</span>
+            <span class="star-btn" data-rating="4" onmouseover="hoverStarRating(4)" onclick="selectStarRating(4)" title="4 ดาว">★</span>
+            <span class="star-btn" data-rating="5" onmouseover="hoverStarRating(5)" onclick="selectStarRating(5)" title="5 ดาว">★</span>
+          </div>
+          <span class="star-label" id="star-label">คลิกดาวเพื่อให้คะแนน Prompt นี้</span>
+        </div>
+
+        <div class="feedback-form">
+          <textarea id="feedback-comment" placeholder="แชร์เทคนิคการนำไปใช้ ข้อสังเกต หรือข้อเสนอแนะสำหรับ ศน. ท่านอื่น..." rows="2"></textarea>
+          <button type="button" class="btn-primary btn-submit-feedback" id="btn-submit-feedback" onclick="submitPromptFeedback()">
+            <span>💬 ส่งคะแนน / รีวิว</span>
+          </button>
+        </div>
+
+        <div class="reviews-container">
+          <div class="reviews-header-small">รีวิวล่าสุดจากศึกษานิเทศก์:</div>
+          <div class="reviews-list" id="reviews-list">
+            <div class="no-reviews">กำลังโหลดความคิดเห็น...</div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <div class="llm-buttons">

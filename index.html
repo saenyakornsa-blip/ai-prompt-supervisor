@@ -261,17 +261,147 @@
     </div>
 
     <div id="view-profile" class="view hidden">
-      <div class="view-header"><h2>👤 โปรไฟล์ศึกษานิเทศก์</h2></div>
-      <div class="profile-card">
-        <div class="profile-avatar"><span id="profile-initials">ศ</span></div>
-        <div class="profile-info">
-          <h3 id="profile-name">ศึกษานิเทศก์</h3>
-          <p id="profile-email" class="text-muted"></p>
-          <span class="role-badge">ศึกษานิเทศก์</span>
+      <div class="view-header">
+        <h2>👤 โปรไฟล์ศึกษานิเทศก์</h2>
+        <p class="text-muted">ปรับแต่งข้อมูลส่วนตัวเพื่อการแทนค่าใน Prompt งานนิเทศอัตโนมัติ</p>
+      </div>
+
+      <!-- GUEST NOTICE (if not logged in) -->
+      <div id="profile-guest-banner" class="profile-guest-notice hidden">
+        <div class="pg-content">
+          <span class="pg-icon">💡</span>
+          <div>
+            <strong>คุณกำลังใช้งานในโหมดผู้เยี่ยมชม</strong>
+            <p>ข้อมูลโปรไฟล์จะถูกบันทึกไว้ในอุปกรณ์นี้ สมัครสมาชิกฟรีเพื่อซิงค์ข้อมูลและปลดล็อกการคัดลอก Prompts ได้ไม่จำกัด</p>
+          </div>
         </div>
-        <div class="profile-actions">
-          <button class="btn-secondary" onclick="signOut()">ออกจากระบบ</button>
+        <button type="button" class="btn-primary btn-sm" onclick="openAuthModal('signup')">สมัครสมาชิกฟรี</button>
+      </div>
+
+      <!-- DIGITAL SUPERVISOR BADGE -->
+      <div class="supervisor-badge-card">
+        <div class="badge-card-header">
+          <div class="badge-avatar-wrap">
+            <span class="badge-avatar" id="profile-initials">ศ</span>
+          </div>
+          <div class="badge-title-wrap">
+            <h3 id="profile-card-name">ศึกษานิเทศก์</h3>
+            <div class="badge-tags">
+              <span class="chip blue" id="profile-card-area">สพป. / สพม.</span>
+              <span class="chip purple" id="profile-card-rank">วิทยฐานะชำนาญการพิเศษ</span>
+            </div>
+            <p id="profile-card-group" class="badge-group-text">กลุ่มงานพัฒนาหลักสูตรและกระบวนการเรียนรู้</p>
+            <p id="profile-email" class="badge-email text-muted"></p>
+          </div>
         </div>
+
+        <div class="badge-card-stats">
+          <div class="badge-stat-item">
+            <span class="badge-stat-num" id="profile-stat-copies">0</span>
+            <span class="badge-stat-label">คัดลอก Prompt</span>
+          </div>
+          <div class="badge-stat-item">
+            <span class="badge-stat-num" id="profile-stat-favs">0</span>
+            <span class="badge-stat-label">รายการโปรด</span>
+          </div>
+          <div class="badge-stat-item">
+            <span class="badge-stat-num" id="profile-stat-autofill-icon">⚡</span>
+            <span class="badge-stat-label" id="profile-stat-autofill-text">Auto-Fill เปิดอยู่</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- EDIT PROFILE FORM -->
+      <div class="profile-form-card">
+        <h3 class="profile-section-title">⚙️ ข้อมูลงานนิเทศส่วนบุคคล</h3>
+        <p class="profile-section-sub">ข้อมูลนี้จะถูกนำไปแทนค่าใน <code>[ตัวแปร]</code> ของ Prompt ให้อัตโนมัติเมื่อกดคัดลอก</p>
+
+        <form id="supervisor-profile-form" onsubmit="event.preventDefault(); saveSupervisorProfile();">
+          <div class="profile-form-grid">
+            <div class="form-group">
+              <label for="profile-input-name">👤 ชื่อ-นามสกุล / ตำแหน่ง (สำหรับให้ AI ขานชื่อ)</label>
+              <input type="text" id="profile-input-name" placeholder="เช่น ศน. ดร.สมชาย ใจดี" oninput="updateAutofillPreview()" />
+            </div>
+
+            <div class="form-group">
+              <label for="profile-input-org">🏛️ สังกัดหลัก</label>
+              <select id="profile-input-org" onchange="updateAreaPlaceholder(); updateAutofillPreview();">
+                <option value="สพป.">สพป. (สำนักงานเขตพื้นที่การศึกษาประถมศึกษา)</option>
+                <option value="สพม.">สพม. (สำนักงานเขตพื้นที่การศึกษามัธยมศึกษา)</option>
+                <option value="สช.">สช. (สำนักงานคณะกรรมการส่งเสริมการศึกษาเอกชน)</option>
+                <option value="อปท.">อปท. / กทม. (องค์กรปกครองส่วนท้องถิ่น / กรุงเทพมหานคร)</option>
+                <option value="สอศ.">สอศ. (สำนักงานคณะกรรมการการอาชีวศึกษา)</option>
+                <option value="อื่นๆ">อื่นๆ</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="profile-input-area">📍 สำนักงานเขตพื้นที่การศึกษา / หน่วยงานต้นสังกัด</label>
+              <input type="text" id="profile-input-area" placeholder="เช่น สพป. เชียงใหม่ เขต 1" oninput="updateAutofillPreview()" />
+            </div>
+
+            <div class="form-group">
+              <label for="profile-input-group">🎯 กลุ่มงาน / ภารกิจนิเทศที่รับผิดชอบหลัก</label>
+              <select id="profile-input-group" onchange="updateAutofillPreview()">
+                <option value="กลุ่มงานพัฒนาหลักสูตรและการเรียนรู้">กลุ่มงานพัฒนาหลักสูตรและการเรียนรู้</option>
+                <option value="กลุ่มงานวัดและประเมินผลการศึกษา">กลุ่มงานวัดและประเมินผลการศึกษา</option>
+                <option value="กลุ่มงานส่งเสริมและพัฒนาสื่อ นวัตกรรมและเทคโนโลยี">กลุ่มงานส่งเสริมและพัฒนาสื่อ นวัตกรรมและเทคโนโลยี</option>
+                <option value="กลุ่มงานนิเทศ ติดตาม และประเมินผล">กลุ่มงานนิเทศ ติดตาม และประเมินผล</option>
+                <option value="กลุ่มงานส่งเสริมระบบการประกันคุณภาพการศึกษา">กลุ่มงานส่งเสริมระบบการประกันคุณภาพการศึกษา</option>
+                <option value="นิเทศกลุ่มสาระการเรียนรู้เฉพาะทาง">นิเทศกลุ่มสาระการเรียนรู้เฉพาะทาง</option>
+                <option value="งานนิเทศบูรณาการทั่วไป">งานนิเทศบูรณาการทั่วไป</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="profile-input-rank">🎖️ ระดับวิทยฐานะ (สำหรับอ้างอิงระดับความท้าทาย วPA)</label>
+              <select id="profile-input-rank" onchange="updateAutofillPreview()">
+                <option value="ศึกษานิเทศก์">ศึกษานิเทศก์ (ยังไม่มีวิทยฐานะ)</option>
+                <option value="ศึกษานิเทศก์ชำนาญการ">ศึกษานิเทศก์ชำนาญการ</option>
+                <option value="ศึกษานิเทศก์ชำนาญการพิเศษ" selected>ศึกษานิเทศก์ชำนาญการพิเศษ</option>
+                <option value="ศึกษานิเทศก์เชี่ยวชาญ">ศึกษานิเทศก์เชี่ยวชาญ</option>
+                <option value="ศึกษานิเทศก์เชี่ยวชาญพิเศษ">ศึกษานิเทศก์เชี่ยวชาญพิเศษ</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="profile-input-subject">📚 กลุ่มสาระฯ หรือความเชี่ยวชาญเฉพาะทาง (ถ้ามี)</label>
+              <input type="text" id="profile-input-subject" placeholder="เช่น วิทยาศาสตร์และเทคโนโลยี, ภาษาไทย, Active Learning" oninput="updateAutofillPreview()" />
+            </div>
+          </div>
+
+          <!-- SMART AUTO-FILL SETTING -->
+          <div class="profile-autofill-card">
+            <div class="autofill-switch-row">
+              <label class="toggle-switch">
+                <input type="checkbox" id="profile-input-autofill" checked onchange="updateAutofillPreview()" />
+                <span class="toggle-slider"></span>
+              </label>
+              <div class="autofill-label-wrap">
+                <strong>⚡ เปิดใช้งานการแทนค่าใน Prompt อัตโนมัติ (Smart Auto-Fill)</strong>
+                <p>แทนค่า <code>[ระบุสำนักงานเขตพื้นที่ฯ]</code>, <code>[ระบุชื่อศึกษานิเทศก์]</code>, <code>[ระบุวิทยฐานะ]</code> ด้วยข้อมูลของคุณทันทีที่กดคัดลอก</p>
+              </div>
+            </div>
+
+            <div class="autofill-preview-box" id="autofill-preview-box">
+              <span class="preview-title">ตัวอย่างการแทนค่าอัตโนมัติ:</span>
+              <div class="preview-chips">
+                <span class="preview-chip"><code>[ชื่อ ศน.]</code> → <strong id="pv-name">ศึกษานิเทศก์</strong></span>
+                <span class="preview-chip"><code>[เขตพื้นที่]</code> → <strong id="pv-area">สพป.</strong></span>
+                <span class="preview-chip"><code>[วิทยฐานะ]</code> → <strong id="pv-rank">ศึกษานิเทศก์ชำนาญการพิเศษ</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-actions-bar">
+            <button type="button" class="btn-primary btn-save-profile" onclick="saveSupervisorProfile()">
+              💾 บันทึกข้อมูลโปรไฟล์
+            </button>
+            <button type="button" class="btn-secondary" id="logout-btn" onclick="signOut()">
+              ออกจากระบบ
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </main>

@@ -151,6 +151,7 @@ function navigateTo(view) {
   if (view === 'favorites')  renderFavoritesView();
   if (view === 'dashboard')  loadDashboard();
   if (view === 'map')        renderLegalMap();
+  if (view === 'profile')    renderSupervisorProfile();
 }
 
 function updateNavActive(view) {
@@ -586,7 +587,14 @@ async function copyPrompt(promptId) {
 
 async function _doCopyPrompt(p) {
   const promptId = p.id;
-  const textToCopy = p.content || p.prompt || '';
+  let textToCopy = p.content || p.prompt || '';
+
+  // Smart Auto-Fill supervisor placeholders
+  const originalText = textToCopy;
+  textToCopy = (typeof applyAutoFillPlaceholders === 'function')
+    ? applyAutoFillPlaceholders(textToCopy)
+    : textToCopy;
+  const wasAutoFilled = (textToCopy !== originalText);
 
   try {
     await navigator.clipboard.writeText(textToCopy);
@@ -638,18 +646,23 @@ async function _doCopyPrompt(p) {
 
   // Toast feedback
   if (state.user) {
-    showToast('คัดลอก Prompt แล้ว! วางใน Claude, ChatGPT หรือ Gemini ได้เลย', 'success');
+    const msg = wasAutoFilled
+      ? 'คัดลอก Prompt แล้ว! (แทนค่าข้อมูล ศน. ให้เรียบร้อย ⚡)'
+      : 'คัดลอก Prompt แล้ว! วางใน Claude, ChatGPT หรือ Gemini ได้เลย';
+    showToast(msg, 'success');
   } else {
     const count = (typeof getGuestCopyCount === 'function') ? getGuestCopyCount() : 0;
     const remaining = Math.max(0, 3 - count);
     if (remaining > 0) {
-      showToast(`คัดลอกสำเร็จ! (สิทธิ์ทดลองเหลือ ${remaining} ครั้ง • สมัครสมาชิกฟรีเพื่อใช้ไม่จำกัด)`, 'success');
+      const extraMsg = wasAutoFilled ? ' • แทนค่าข้อมูลให้เรียบร้อย ⚡' : '';
+      showToast(`คัดลอกสำเร็จ! (สิทธิ์ทดลองเหลือ ${remaining} ครั้ง${extraMsg})`, 'success');
     } else {
       showToast('คัดลอกสำเร็จ! (คุณใช้สิทธิ์ทดลองครบ 3 ครั้งแล้ว กรุณาสมัครสมาชิกฟรีเพื่อใช้งานไม่จำกัด)', 'info');
     }
   }
 
   if (state.currentView === 'dashboard') loadDashboard();
+  if (state.currentView === 'profile') renderSupervisorProfile();
   if (typeof updateAccessIndicator === 'function') updateAccessIndicator();
 }
 
@@ -1537,6 +1550,241 @@ document.addEventListener('click', (e) => {
 });
 
 /* ═══════════════════════════════════════════════════════════════
+   15.5 SUPERVISOR PROFILE & SMART AUTO-FILL SYSTEM
+═══════════════════════════════════════════════════════════════ */
+const SUPERVISOR_PROFILE_KEY = 'ai_prompt_supervisor_profile';
+
+function getSupervisorProfile() {
+  try {
+    const saved = localStorage.getItem(SUPERVISOR_PROFILE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch (e) {
+    console.warn('Failed to parse supervisor profile:', e);
+  }
+  // Default values
+  const defaultName = state.user?.user_metadata?.display_name || state.user?.email?.split('@')[0] || '';
+  return {
+    name: defaultName,
+    org: 'สพป.',
+    area: '',
+    group: 'กลุ่มงานพัฒนาหลักสูตรและการเรียนรู้',
+    rank: 'ศึกษานิเทศก์ชำนาญการพิเศษ',
+    subject: '',
+    autoFillEnabled: true
+  };
+}
+
+function renderSupervisorProfile() {
+  const profile = getSupervisorProfile();
+
+  // Guest vs Member notice
+  const guestBanner = document.getElementById('profile-guest-banner');
+  if (guestBanner) {
+    guestBanner.classList.toggle('hidden', Boolean(state.user));
+  }
+
+  // Update Badge Card UI
+  const cardName = document.getElementById('profile-card-name');
+  if (cardName) cardName.textContent = profile.name || (state.user ? 'ศึกษานิเทศก์' : 'ศึกษานิเทศก์ (ผู้เยี่ยมชม)');
+
+  const cardArea = document.getElementById('profile-card-area');
+  if (cardArea) cardArea.textContent = profile.area || profile.org || 'สพป. / สพม.';
+
+  const cardRank = document.getElementById('profile-card-rank');
+  if (cardRank) cardRank.textContent = profile.rank || 'ศึกษานิเทศก์ชำนาญการพิเศษ';
+
+  const cardGroup = document.getElementById('profile-card-group');
+  if (cardGroup) cardGroup.textContent = profile.group || 'กลุ่มงานนิเทศการศึกษา';
+
+  const cardEmail = document.getElementById('profile-email');
+  if (cardEmail) cardEmail.textContent = state.user?.email || 'ยังไม่ได้เข้าสู่ระบบ';
+
+  const initialsEl = document.getElementById('profile-initials');
+  if (initialsEl) {
+    const initial = (profile.name || '').trim().charAt(0).toUpperCase() || (state.user ? 'ศ' : 'ศ');
+    initialsEl.textContent = initial || 'ศ';
+  }
+
+  // Stats in Badge Card
+  const statsCopies = document.getElementById('profile-stat-copies');
+  if (statsCopies) {
+    const stats = JSON.parse(localStorage.getItem('ai_prompt_kruthai_copy_stats') || '{}');
+    const totalCopies = Object.values(stats).reduce((a, b) => a + b, 0);
+    statsCopies.textContent = totalCopies || 0;
+  }
+
+  const statsFavs = document.getElementById('profile-stat-favs');
+  if (statsFavs) {
+    statsFavs.textContent = state.favorites.size || 0;
+  }
+
+  const statAutofillText = document.getElementById('profile-stat-autofill-text');
+  const statAutofillIcon = document.getElementById('profile-stat-autofill-icon');
+  if (statAutofillText) {
+    statAutofillText.textContent = profile.autoFillEnabled ? 'Auto-Fill เปิดอยู่' : 'Auto-Fill ปิดอยู่';
+  }
+  if (statAutofillIcon) {
+    statAutofillIcon.textContent = profile.autoFillEnabled ? '⚡' : '⚪';
+  }
+
+  // Populate Form Fields
+  const inputName = document.getElementById('profile-input-name');
+  if (inputName) inputName.value = profile.name || '';
+
+  const inputOrg = document.getElementById('profile-input-org');
+  if (inputOrg) inputOrg.value = profile.org || 'สพป.';
+
+  const inputArea = document.getElementById('profile-input-area');
+  if (inputArea) inputArea.value = profile.area || '';
+
+  const inputGroup = document.getElementById('profile-input-group');
+  if (inputGroup) inputGroup.value = profile.group || 'กลุ่มงานพัฒนาหลักสูตรและการเรียนรู้';
+
+  const inputRank = document.getElementById('profile-input-rank');
+  if (inputRank) inputRank.value = profile.rank || 'ศึกษานิเทศก์ชำนาญการพิเศษ';
+
+  const inputSubject = document.getElementById('profile-input-subject');
+  if (inputSubject) inputSubject.value = profile.subject || '';
+
+  const inputAutofill = document.getElementById('profile-input-autofill');
+  if (inputAutofill) inputAutofill.checked = profile.autoFillEnabled ?? true;
+
+  updateAreaPlaceholder();
+  updateAutofillPreview();
+}
+
+function updateAreaPlaceholder() {
+  const org = document.getElementById('profile-input-org')?.value || 'สพป.';
+  const areaInput = document.getElementById('profile-input-area');
+  if (!areaInput) return;
+
+  if (org === 'สพป.') areaInput.placeholder = 'เช่น สพป. เชียงใหม่ เขต 1';
+  else if (org === 'สพม.') areaInput.placeholder = 'เช่น สพม. กรุงเทพมหานคร เขต 1';
+  else if (org === 'สช.') areaInput.placeholder = 'เช่น สำนักงานการศึกษาเอกชนจังหวัดสงขลา';
+  else if (org === 'อปท.') areaInput.placeholder = 'เช่น สำนักการศึกษา เทศบาลนครนนทบุรี';
+  else if (org === 'สอศ.') areaInput.placeholder = 'เช่น สถาบันการอาชีวศึกษาภาคเหนือ 1';
+  else areaInput.placeholder = 'เช่น หน่วยงานต้นสังกัด';
+}
+
+function updateAutofillPreview() {
+  const name = document.getElementById('profile-input-name')?.value?.trim() || 'ศึกษานิเทศก์';
+  const org = document.getElementById('profile-input-org')?.value || 'สพป.';
+  const area = document.getElementById('profile-input-area')?.value?.trim() || org;
+  const rank = document.getElementById('profile-input-rank')?.value || 'ศึกษานิเทศก์ชำนาญการพิเศษ';
+  const enabled = document.getElementById('profile-input-autofill')?.checked ?? true;
+
+  const pvName = document.getElementById('pv-name');
+  if (pvName) pvName.textContent = name;
+
+  const pvArea = document.getElementById('pv-area');
+  if (pvArea) pvArea.textContent = area;
+
+  const pvRank = document.getElementById('pv-rank');
+  if (pvRank) pvRank.textContent = rank;
+
+  const previewBox = document.getElementById('autofill-preview-box');
+  if (previewBox) {
+    previewBox.style.opacity = enabled ? '1' : '0.4';
+    previewBox.style.pointerEvents = enabled ? 'auto' : 'none';
+  }
+}
+
+function saveSupervisorProfile() {
+  const profile = {
+    name: document.getElementById('profile-input-name')?.value?.trim() || '',
+    org: document.getElementById('profile-input-org')?.value || 'สพป.',
+    area: document.getElementById('profile-input-area')?.value?.trim() || '',
+    group: document.getElementById('profile-input-group')?.value || '',
+    rank: document.getElementById('profile-input-rank')?.value || '',
+    subject: document.getElementById('profile-input-subject')?.value?.trim() || '',
+    autoFillEnabled: document.getElementById('profile-input-autofill')?.checked ?? true
+  };
+
+  localStorage.setItem(SUPERVISOR_PROFILE_KEY, JSON.stringify(profile));
+
+  // Sync to Supabase user metadata if signed in
+  if (_sb && state.user) {
+    _sb.auth.updateUser({
+      data: {
+        display_name: profile.name,
+        supervisor_org: profile.org,
+        supervisor_area: profile.area,
+        supervisor_group: profile.group,
+        supervisor_rank: profile.rank,
+        supervisor_subject: profile.subject,
+        autofill_enabled: profile.autoFillEnabled
+      }
+    }).then(({ data, error }) => {
+      if (error) console.warn('[Supabase] Profile sync error:', error);
+      else console.log('[Supabase] Profile synced successfully');
+    });
+  }
+
+  renderSupervisorProfile();
+  updateProfileUI(state.user);
+  showToast('บันทึกข้อมูลโปรไฟล์และตั้งค่าแทนค่าอัตโนมัติเรียบร้อยแล้ว ✅', 'success');
+}
+
+/**
+ * แทนค่าตัวแปรใน Prompt อัตโนมัติตามโปรไฟล์ ศน.
+ */
+function applyAutoFillPlaceholders(text) {
+  if (!text) return '';
+  const profile = getSupervisorProfile();
+  if (!profile || !profile.autoFillEnabled) return text;
+
+  let res = text;
+  const name = (profile.name || '').trim();
+  const area = (profile.area || '').trim();
+  const org = (profile.org || '').trim();
+  const rank = (profile.rank || '').trim();
+  const group = (profile.group || '').trim();
+  const subject = (profile.subject || '').trim();
+
+  // 1. สำนักงานเขตพื้นที่ฯ & สังกัด
+  if (area) {
+    res = res.replace(/\[(?:ระบุ)?(?:ชื่อ)?(?:สำนักงาน)?เขตพื้นที่(?:การศึกษา)?\]/gi, area);
+    res = res.replace(/\[เขตพื้นที่\]/gi, area);
+    res = res.replace(/\[เช่น สพป\.เชียงใหม่ เขต 1\]/gi, area);
+    res = res.replace(/\[สพป\.\/สพม\.\/สังกัด\]/gi, area);
+    res = res.replace(/\[สังกัดเขตพื้นที่\]/gi, area);
+    res = res.replace(/\[สังกัด\]/gi, area);
+    res = res.replace(/\[สังกัด\/บริบท\]/gi, area);
+    res = res.replace(/\[บริบทเขตพื้นที่ของผม\]/gi, `บริบทของ ${area}`);
+  } else if (org) {
+    res = res.replace(/\[สังกัด\]/gi, org);
+  }
+
+  // 2. ชื่อ-นามสกุล ศึกษานิเทศก์
+  if (name) {
+    res = res.replace(/\[(?:ระบุ)?ชื่อ(?:-สกุล)?\s*ศึกษานิเทศก์\]/gi, name);
+    res = res.replace(/\[ชื่อ-สกุล ศึกษานิเทศก์, สพป\.\/สพม\.\/สังกัด\]/gi, `${name}, ${area || org || 'สพป./สพม.'}`);
+    res = res.replace(/\[ชื่อ-สกุล,\s*ตำแหน่ง,\s*วิทยฐานะ,\s*สังกัดเขตพื้นที่\]/gi, `${name}, ${rank || 'ศึกษานิเทศก์'}, ${area || org || 'เขตพื้นที่การศึกษา'}`);
+  }
+
+  // 3. ระดับวิทยฐานะ (สำหรับ วPA)
+  if (rank) {
+    res = res.replace(/\[(?:ระบุ)?วิทยฐานะ\]/gi, rank);
+    res = res.replace(/\[ชำนาญการ \/ ชำนาญการพิเศษ \/ เชี่ยวชาญ\]/gi, rank);
+    res = res.replace(/\[ชำนาญการพิเศษ \/ เชี่ยวชาญ\]/gi, rank);
+    res = res.replace(/\[ชำนาญการ \/ ชำนาญการพิเศษ\]/gi, rank);
+    res = res.replace(/\[ชำนาญการพิเศษ \/ เชี่ยวชาญ \/ เชี่ยวชาญพิเศษ\]/gi, rank);
+    res = res.replace(/\[ชำนาญการพิเศษ \(คศ\.3\) หรือ เชี่ยวชาญ \(คศ\.4\)\]/gi, rank);
+    res = res.replace(/\[ระบุ เช่น ศึกษานิเทศก์ชำนาญการพิเศษ สพป\.\.\.\.\]/gi, `${rank} ${area || ''}`);
+  }
+
+  // 4. กลุ่มงาน & กลุ่มสาระ
+  if (group) {
+    res = res.replace(/\[กลุ่มงาน\/สาระ\]/gi, group);
+  }
+  if (subject) {
+    res = res.replace(/\[กลุ่มสาระการเรียนรู้\]/gi, subject);
+  }
+
+  return res;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    16. TOAST NOTIFICATIONS
 ═══════════════════════════════════════════════════════════════ */
 function showToast(message, type = 'success') {
@@ -2275,5 +2523,11 @@ window.openPrompt11Details = openPrompt11Details;
 window.handleBottomNavProfile = handleBottomNavProfile;
 window.openMobileSearch = openMobileSearch;
 window.closeMobileSearch = closeMobileSearch;
+window.renderSupervisorProfile = renderSupervisorProfile;
+window.saveSupervisorProfile = saveSupervisorProfile;
+window.updateAreaPlaceholder = updateAreaPlaceholder;
+window.updateAutofillPreview = updateAutofillPreview;
+window.applyAutoFillPlaceholders = applyAutoFillPlaceholders;
+window.getSupervisorProfile = getSupervisorProfile;
 
 

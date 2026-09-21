@@ -1,0 +1,17 @@
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    # รันอัตโนมัติทุกๆ 3 วัน เวลา 00:00 UTC
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # ปุ่มสำหรับกดรันด้วยตนเองได้ตลอดเวลา
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Project
+        run: |
+          curl -i -X GET 'https://bgthbihseqglxzsfguqy.supabase.co/rest/v1/' \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"

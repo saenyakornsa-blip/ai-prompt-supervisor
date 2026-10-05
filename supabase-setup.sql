@@ -167,6 +167,19 @@ CREATE POLICY "Users can delete own feedback" ON public.community_feedback
 -- 7. RPC Functions สำหรับ Dynamic Community Dashboard (4 เล่ม)
 -- ============================================================
 
+-- ซิงค์ผู้ใช้ทุกคนใน auth.users เข้าตาราง user_profiles (เพื่อให้ข้อมูลตรงกัน)
+INSERT INTO public.user_profiles (id, email, display_name)
+SELECT 
+  id, 
+  email,
+  COALESCE(raw_user_meta_data->>'display_name', split_part(email, '@', 1))
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
+
+-- อนุญาตให้อ่านโปรไฟล์และนับจำนวนสมาชิกได้
+DROP POLICY IF EXISTS "Anyone can read user_profiles" ON public.user_profiles;
+CREATE POLICY "Anyone can read user_profiles" ON public.user_profiles FOR SELECT TO anon, authenticated USING (true);
+
 -- 1. ภาพรวมตัวเลขสถิติทั้งระบบ
 CREATE OR REPLACE FUNCTION public.get_community_overview()
 RETURNS json

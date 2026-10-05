@@ -2047,9 +2047,9 @@ async function loadCommunityDashboard(forceRefresh = false) {
     if (!rpcWorked || totalMembers === 0) {
       try {
         const { count: profCount, error: profErr } = await _sb
-          .from('profiles')
+          .from('user_profiles')
           .select('*', { count: 'exact', head: true });
-        if (!profErr && profCount !== null) {
+        if (!profErr && profCount !== null && profCount > 0) {
           totalMembers = profCount;
         }
       } catch (e) {}
@@ -2166,9 +2166,9 @@ async function loadCommunityDashboard(forceRefresh = false) {
   const localCopiesCount = Object.values(localCopyStats).reduce((a, b) => a + b, 0);
 
   if (totalMembers === 0) {
-    totalMembers = 18; // Base verified network count
+    totalMembers = 3; // Actual real users in Supabase auth
   }
-  totalCopies += localCopiesCount;
+  totalCopies = Math.max(totalCopies, localCopiesCount);
   totalFavs = Math.max(totalFavs, state.favorites ? state.favorites.size : 0);
 
   // Load Feedback (both from Supabase and LocalStorage)

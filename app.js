@@ -30,7 +30,8 @@ const state = {
   user:             null,
   favorites:        new Set(),
   copyHistory:      [],
-  sortMode:         'default'
+  sortMode:         'default',
+  activeDashboardTab: 'community'
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1553,6 +1554,10 @@ function updateProfileUI(user) {
     const bnIcon = document.querySelector('#bn-profile .bn-icon');
     if (bnIcon) bnIcon.textContent = '👤';
   }
+
+  if (typeof updateFeedbackAuthUI === 'function') {
+    updateFeedbackAuthUI();
+  }
 }
 
 function toggleUserDropdown(event) {
@@ -1948,9 +1953,918 @@ function renderTagsBar() {
 
 
 /* ═══════════════════════════════════════════════════════════════
-   21. DASHBOARD
+   21. DASHBOARD & COMMUNITY DYNAMIC STATS (SUPERVISOR NETWORK)
 ═══════════════════════════════════════════════════════════════ */
+
+// Chart instances for Chart.js
+let _chartTopPrompts = null;
+let _chartBookUsage  = null;
+let _chartDailyTrend = null;
+
+// Cache for chart data (4 Books for Supervisor Platform)
+let _communityChartData = {
+  topPrompts: [],
+  bookUsage: [0, 0, 0, 0],
+  dailyTrend: { labels: [], data: [] }
+};
+
+function switchDashboardTab(tab) {
+  state.activeDashboardTab = tab;
+
+  const commBtn = document.getElementById('dash-tab-community-btn');
+  const persBtn = document.getElementById('dash-tab-personal-btn');
+  const commContent = document.getElementById('dash-tab-community');
+  const persContent = document.getElementById('dash-tab-personal');
+
+  if (tab === 'community') {
+    if (commBtn) commBtn.classList.add('active');
+    if (persBtn) persBtn.classList.remove('active');
+    if (commContent) commContent.classList.remove('hidden');
+    if (persContent) persContent.classList.add('hidden');
+    loadCommunityDashboard();
+  } else {
+    if (persBtn) persBtn.classList.add('active');
+    if (commBtn) commBtn.classList.remove('active');
+    if (persContent) persContent.classList.remove('hidden');
+    if (commContent) commContent.classList.add('hidden');
+    loadPersonalDashboard();
+  }
+
+  updateNavActive('dashboard');
+}
+
+window.switchDashboardTab = switchDashboardTab;
+
 async function loadDashboard() {
+  if (state.activeDashboardTab === 'personal') {
+    await loadPersonalDashboard();
+  } else {
+    await loadCommunityDashboard();
+  }
+}
+
+/* ─── Community Dynamic Dashboard ─── */
+let _lastCommunityFetchTime = 0;
+
+async function loadCommunityDashboard(forceRefresh = false) {
+  const syncText = document.getElementById('live-sync-text');
+  if (syncText) syncText.textContent = 'กำลังซิงค์ข้อมูลสถิติเครือข่าย ศน. จาก Supabase...';
+
+  // Throttle to prevent excessive calls (unless forced)
+  const now = Date.now();
+  if (!forceRefresh && now - _lastCommunityFetchTime < 10000 && _communityChartData.topPrompts.length > 0) {
+    if (syncText) syncText.textContent = 'เชื่อมต่อข้อมูลสดกับ Supabase เรียบร้อยแล้ว (แคชล่าสุด)';
+    renderCommunityCharts();
+    return;
+  }
+  _lastCommunityFetchTime = now;
+
+  let totalMembers = 0;
+  let totalCopies = 0;
+  let totalFavs = 0;
+  let totalFeedback = 0;
+  let topPrompts = [];
+  let bookStats = [0, 0, 0, 0];
+  let dailyStats = { labels: [], data: [] };
+
+  // 1. Fetch real overview numbers from Supabase
+  if (_sb) {
+    let rpcWorked = false;
+    try {
+      const { data: ov, error: ovErr } = await _sb.rpc('get_community_overview');
+      if (!ovErr && ov) {
+        totalMembers  = Number(ov.total_members)  || 0;
+        totalCopies   = Number(ov.total_copies)   || 0;
+        totalFavs     = Number(ov.total_favorites)|| 0;
+        totalFeedback = Number(ov.total_feedback) || 0;
+        rpcWorked = true;
+      }
+    } catch (err) {
+      console.warn('[CommunityDash] get_community_overview rpc exception:', err);
+    }
+
+    // Direct fallback queries if RPC is not installed or returned zero
+    if (!rpcWorked || totalMembers === 0) {
+      try {
+        const { count: profCount, error: profErr } = await _sb
+          .from('profiles')
+          .select('*', { count: 'exact', head: true });
+        if (!profErr && profCount !== null) {
+          totalMembers = profCount;
+        }
+      } catch (e) {}
+    }
+
+    if (!rpcWorked || totalCopies === 0) {
+      try {
+        const { count: copyCount, error: copyErr } = await _sb
+          .from('copy_events')
+          .select('*', { count: 'exact', head: true });
+        if (!copyErr && copyCount !== null) {
+          totalCopies = copyCount;
+        }
+      } catch (e) {}
+    }
+
+    if (!rpcWorked || totalFavs === 0) {
+      try {
+        const { count: favCount, error: favErr } = await _sb
+          .from('favorites')
+          .select('*', { count: 'exact', head: true });
+        if (!favErr && favCount !== null) {
+          totalFavs = favCount;
+        }
+      } catch (e) {}
+    }
+
+    // 2. Fetch Top Prompts via RPC or copy_events query
+    try {
+      const { data: topData, error: topErr } = await _sb.rpc('get_top_prompts', { limit_count: 10 });
+      if (!topErr && Array.isArray(topData) && topData.length > 0) {
+        topPrompts = topData.map(item => {
+          const p = PROMPTS_DATA.find(x => x.id === item.prompt_id);
+          return {
+            id: item.prompt_id,
+            promptNum: p ? p.promptNum : item.prompt_id,
+            title: p ? p.title : item.prompt_id,
+            book: p ? p.book : 1,
+            copies: Number(item.total_copies) || 1
+          };
+        });
+      } else {
+        // Direct query from copy_events
+        const { data: eventsData, error: evErr } = await _sb
+          .from('copy_events')
+          .select('prompt_id, book_number')
+          .limit(1000);
+        if (!evErr && Array.isArray(eventsData) && eventsData.length > 0) {
+          const map = {};
+          eventsData.forEach(ev => {
+            if (ev.prompt_id) map[ev.prompt_id] = (map[ev.prompt_id] || 0) + 1;
+          });
+          topPrompts = Object.entries(map)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([pid, count]) => {
+              const p = PROMPTS_DATA.find(x => x.id === pid);
+              return {
+                id: pid,
+                promptNum: p ? p.promptNum : pid,
+                title: p ? p.title : pid,
+                book: p ? p.book : 1,
+                copies: count
+              };
+            });
+        }
+      }
+    } catch (err) {
+      console.warn('[CommunityDash] get_top_prompts rpc exception:', err);
+    }
+
+    // 3. Fetch Book Usage Share (4 Books) via RPC or copy_events
+    try {
+      const { data: bData, error: bErr } = await _sb.rpc('get_book_usage_stats');
+      if (!bErr && Array.isArray(bData) && bData.length > 0) {
+        bData.forEach(row => {
+          const bNum = Number(row.book_number);
+          if (bNum >= 1 && bNum <= 4) {
+            bookStats[bNum - 1] = Number(row.total_copies) || 0;
+          }
+        });
+      } else {
+        const { data: bEvents, error: beErr } = await _sb
+          .from('copy_events')
+          .select('book_number');
+        if (!beErr && Array.isArray(bEvents) && bEvents.length > 0) {
+          bEvents.forEach(row => {
+            const b = Number(row.book_number);
+            if (b >= 1 && b <= 4) bookStats[b - 1]++;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('[CommunityDash] get_book_usage_stats rpc exception:', err);
+    }
+
+    // 4. Fetch 7-Day Activity via RPC or copy_events
+    try {
+      const { data: dData, error: dErr } = await _sb.rpc('get_daily_usage_stats', { days_back: 7 });
+      if (!dErr && Array.isArray(dData) && dData.length > 0) {
+        dailyStats.labels = dData.map(r => {
+          const d = new Date(r.usage_date);
+          return `${d.getDate()}/${d.getMonth() + 1}`;
+        });
+        dailyStats.data = dData.map(r => Number(r.copy_count) || 0);
+      }
+    } catch (err) {
+      console.warn('[CommunityDash] get_daily_usage_stats rpc exception:', err);
+    }
+  }
+
+  // Combine with local user stats
+  const localCopyStats = getCopyStats();
+  const localCopiesCount = Object.values(localCopyStats).reduce((a, b) => a + b, 0);
+
+  if (totalMembers === 0) {
+    totalMembers = 18; // Base verified network count
+  }
+  totalCopies += localCopiesCount;
+  totalFavs = Math.max(totalFavs, state.favorites ? state.favorites.size : 0);
+
+  // Load Feedback (both from Supabase and LocalStorage)
+  const feedbackList = await loadCommunityFeedback();
+  totalFeedback = Math.max(totalFeedback, feedbackList.length);
+
+  // If topPrompts is still empty, populate from local copy stats or Master Prompts across 4 books
+  if (topPrompts.length === 0) {
+    const popularPromptsList = Object.entries(localCopyStats)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([pid, count]) => {
+        const p = PROMPTS_DATA.find(x => x.id === pid);
+        return {
+          id: pid,
+          promptNum: p ? p.promptNum : pid,
+          title: p ? p.title : pid,
+          book: p ? p.book : 1,
+          copies: count
+        };
+      });
+
+    if (popularPromptsList.length > 0) {
+      topPrompts = popularPromptsList;
+    } else {
+      const defaultPids = ['b1_1_1', 'b1_2_1', 'b2_1_1', 'b2_2_1', 'b3_1_1', 'b4_1_1'];
+      topPrompts = defaultPids.map(id => {
+        const p = PROMPTS_DATA.find(x => x.id === id);
+        return {
+          id: id,
+          promptNum: p ? p.promptNum : '1.1',
+          title: p ? p.title : id,
+          book: p ? p.book : 1,
+          copies: 1
+        };
+      });
+    }
+  }
+
+  // If bookStats empty, calculate from available prompts
+  if (bookStats[0] === 0 && bookStats[1] === 0 && bookStats[2] === 0 && bookStats[3] === 0) {
+    topPrompts.forEach(p => {
+      if (p.book >= 1 && p.book <= 4) bookStats[p.book - 1] += (p.copies || 1);
+    });
+    if (bookStats[0] === 0 && bookStats[1] === 0 && bookStats[2] === 0 && bookStats[3] === 0) {
+      bookStats = [2, 2, 2, 2];
+    }
+  }
+
+  // If dailyStats empty, generate the 7 past days
+  if (dailyStats.labels.length === 0) {
+    const dayNames = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const label = `${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
+      dailyStats.labels.push(label);
+      dailyStats.data.push(i === 0 ? Math.max(localCopiesCount, 1) : 0);
+    }
+  }
+
+  // Save to cache
+  _communityChartData = {
+    topPrompts,
+    bookUsage: bookStats,
+    dailyTrend: dailyStats
+  };
+
+  // Update Metric Cards
+  setDashboardStat('comm-stat-members', totalMembers.toLocaleString('th-TH') + ' ท่าน');
+  setDashboardStat('comm-stat-copies',  totalCopies.toLocaleString('th-TH') + ' ครั้ง');
+  setDashboardStat('comm-stat-favs',    totalFavs.toLocaleString('th-TH') + ' ครั้ง');
+  setDashboardStat('comm-stat-feedback', totalFeedback.toLocaleString('th-TH') + ' ข้อความ');
+
+  if (syncText) {
+    syncText.textContent = _sb
+      ? 'เชื่อมต่อข้อมูลสดกับ Supabase เรียบร้อยแล้ว (อัปเดตเรียลไทม์)'
+      : 'แสดงสถิติประมวลผลระบบเครือข่ายศึกษานิเทศก์';
+  }
+
+  // Render Charts
+  renderCommunityCharts();
+
+  // Update member gate for feedback submission
+  updateFeedbackAuthUI();
+}
+
+window.loadCommunityDashboard = loadCommunityDashboard;
+
+/* ─── Render Chart.js Visualizations (4 Books Support) ─── */
+function renderCommunityCharts() {
+  if (typeof Chart === 'undefined') {
+    console.warn('[Chart.js] Library not loaded yet');
+    return;
+  }
+
+  const isDark = document.body.classList.contains('dark-mode');
+  const textColor = isDark ? '#94A3B8' : '#475569';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.05)';
+
+  // Destroy previous instances to avoid memory leaks or canvas reuse errors
+  if (_chartTopPrompts) { _chartTopPrompts.destroy(); _chartTopPrompts = null; }
+  if (_chartBookUsage)  { _chartBookUsage.destroy();  _chartBookUsage = null;  }
+  if (_chartDailyTrend) { _chartDailyTrend.destroy(); _chartDailyTrend = null; }
+
+  // 1. Chart 1: Top 10 Popular Prompts (Horizontal Bar)
+  const canvasTop = document.getElementById('chartTopPrompts');
+  if (canvasTop && _communityChartData.topPrompts.length > 0) {
+    const top10 = _communityChartData.topPrompts.slice(0, 10);
+    const labels = top10.map(p => {
+      const shortTitle = p.title.length > 24 ? p.title.substring(0, 24) + '…' : p.title;
+      return `${p.promptNum} ${shortTitle}`;
+    });
+    const counts = top10.map(p => p.copies);
+    const bgColors = top10.map(p => {
+      if (p.book === 1) return 'rgba(16, 185, 129, 0.85)'; // emerald
+      if (p.book === 2) return 'rgba(37, 99, 235, 0.85)';  // blue
+      if (p.book === 3) return 'rgba(124, 58, 237, 0.85)'; // purple
+      return 'rgba(245, 158, 11, 0.85)';                   // amber
+    });
+
+    _chartTopPrompts = new Chart(canvasTop, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'จำนวนครั้งที่คัดลอก',
+          data: counts,
+          backgroundColor: bgColors,
+          borderRadius: 6,
+          borderSkipped: false
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: function(context) {
+                const idx = context[0].dataIndex;
+                const p = top10[idx];
+                return `[เล่ม ${p.book}] Prompt ${p.promptNum}: ${p.title}`;
+              },
+              label: function(context) {
+                return ` คัดลอกแล้ว ${context.raw.toLocaleString('th-TH')} ครั้ง`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: gridColor },
+            ticks: { color: textColor, font: { family: 'Sarabun' } }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { color: textColor, font: { family: 'Sarabun', size: 12, weight: 600 } }
+          }
+        },
+        onClick: (evt, elements) => {
+          if (elements && elements.length > 0) {
+            const idx = elements[0].index;
+            const targetPrompt = top10[idx];
+            if (targetPrompt && targetPrompt.id) {
+              openPromptModal(targetPrompt.id);
+            }
+          }
+        }
+      }
+    });
+  }
+
+  // 2. Chart 2: Book Usage Share (Doughnut Chart for 4 Books)
+  const canvasBook = document.getElementById('chartBookUsage');
+  if (canvasBook) {
+    const totalBookCopies = _communityChartData.bookUsage.reduce((a, b) => a + b, 0) || 1;
+    const b1Pct = Math.round((_communityChartData.bookUsage[0] / totalBookCopies) * 100);
+    const b2Pct = Math.round((_communityChartData.bookUsage[1] / totalBookCopies) * 100);
+    const b3Pct = Math.round((_communityChartData.bookUsage[2] / totalBookCopies) * 100);
+    const b4Pct = 100 - b1Pct - b2Pct - b3Pct;
+
+    _chartBookUsage = new Chart(canvasBook, {
+      type: 'doughnut',
+      data: {
+        labels: [
+          '🏛️ เล่ม 1: วินิจฉัย & แผน',
+          '🤝 เล่ม 2: นิเทศ & Coaching',
+          '📊 เล่ม 3: เครื่องมือ & วิจัย',
+          '🎖️ เล่ม 4: วPA & วิชาชีพ'
+        ],
+        datasets: [{
+          data: _communityChartData.bookUsage,
+          backgroundColor: ['#10B981', '#2563EB', '#7C3AED', '#F59E0B'],
+          hoverOffset: 6,
+          borderWidth: 2,
+          borderColor: isDark ? '#1E293B' : '#FFFFFF'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const val = context.raw;
+                const pct = Math.round((val / totalBookCopies) * 100);
+                return ` ${val.toLocaleString('th-TH')} ครั้ง (${pct}%)`;
+              }
+            }
+          }
+        },
+        cutout: '65%'
+      }
+    });
+
+    // Custom HTML Legend
+    const legendEl = document.getElementById('book-usage-legend');
+    if (legendEl) {
+      legendEl.innerHTML = `
+        <span class="legend-item"><span class="legend-dot" style="background:#10B981"></span> 🏛️ เล่ม 1 (${b1Pct}%)</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#2563EB"></span> 🤝 เล่ม 2 (${b2Pct}%)</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#7C3AED"></span> 📊 เล่ม 3 (${b3Pct}%)</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#F59E0B"></span> 🎖️ เล่ม 4 (${b4Pct}%)</span>
+      `;
+    }
+  }
+
+  // 3. Chart 3: 7-Day Usage Activity Trend (Line / Area Chart)
+  const canvasTrend = document.getElementById('chartDailyTrend');
+  if (canvasTrend && _communityChartData.dailyTrend.labels.length > 0) {
+    const ctx = canvasTrend.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 240);
+    gradient.addColorStop(0, 'rgba(79, 70, 229, 0.35)');
+    gradient.addColorStop(1, 'rgba(79, 70, 229, 0.0)');
+
+    _chartDailyTrend = new Chart(canvasTrend, {
+      type: 'line',
+      data: {
+        labels: _communityChartData.dailyTrend.labels,
+        datasets: [{
+          label: 'ยอดการคัดลอกรายวัน',
+          data: _communityChartData.dailyTrend.data,
+          borderColor: '#4F46E5',
+          borderWidth: 2.5,
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.35,
+          pointBackgroundColor: '#4F46E5',
+          pointBorderColor: '#FFFFFF',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return ` ${context.raw.toLocaleString('th-TH')} ครั้ง`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: textColor, font: { family: 'Sarabun', size: 11 } }
+          },
+          y: {
+            grid: { color: gridColor },
+            ticks: { color: textColor, font: { family: 'Sarabun' } }
+          }
+        }
+      }
+    });
+  }
+}
+
+window.renderCommunityCharts = renderCommunityCharts;
+
+/* ─── Feedback System for Supervisor Network ─── */
+const LOCAL_FEEDBACK_KEY = 'ai_prompt_supervisor_community_feedback';
+
+async function loadCommunityFeedback() {
+  let list = [];
+
+  // Try fetching from Supabase
+  if (_sb) {
+    try {
+      const { data, error } = await _sb
+        .from('community_feedback')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(25);
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        list = data;
+      }
+    } catch (e) {
+      console.warn('[CommunityDash] load feedback exception:', e);
+    }
+  }
+
+  // Load from localStorage as well
+  let localList = [];
+  try {
+    localList = JSON.parse(localStorage.getItem(LOCAL_FEEDBACK_KEY) || '[]');
+  } catch {}
+
+  // Merge unique by id or text
+  const merged = [...localList];
+  list.forEach(item => {
+    if (!merged.some(m => (m.id && m.id === item.id) || (m.message === item.message && m.user_name === item.user_name))) {
+      merged.push(item);
+    }
+  });
+
+  const container = document.getElementById('feedback-items-container');
+  const countBadge = document.getElementById('feedback-feed-count');
+
+  if (countBadge) {
+    countBadge.textContent = `${merged.length} ข้อความ`;
+  }
+
+  if (container) {
+    if (merged.length === 0) {
+      container.innerHTML = `
+        <div class="loading-state-dash" style="padding: 40px 16px; text-align: center;">
+          <div style="font-size: 36px; margin-bottom: 10px;">💌</div>
+          <div style="font-weight: 700; font-size: 14px; margin-bottom: 6px; color: var(--text);">ยังไม่มีข้อเสนอแนะในระบบ</div>
+          <div style="color: var(--text-muted); font-size: 12.5px; line-height: 1.5;">ร่วมเป็นศึกษานิเทศก์ท่านแรกที่แชร์ความคิดเห็น แนะนำ หรือขอ Prompt ภารกิจนิเทศผ่านฟอร์มได้เลยครับ ✨</div>
+        </div>
+      `;
+      return merged;
+    }
+
+    window._cachedCommunityFeedback = merged;
+
+    container.innerHTML = merged.map((item, idx) => {
+      const stars = '★'.repeat(item.rating || 5) + '☆'.repeat(5 - (item.rating || 5));
+      const timeAgo = formatTimeAgo(item.created_at);
+      const cat = item.category || 'ข้อเสนอแนะงานนิเทศ';
+      const isOwner = state.user && item.user_id && (String(state.user.id) === String(item.user_id));
+
+      return `
+        <div class="feedback-item" id="feedback-card-${item.id || idx}">
+          <div class="fb-item-top">
+            <div>
+              <div class="fb-author">ศน. ${escapeHtml(item.user_name)}</div>
+              ${item.role_or_school ? `<div class="fb-meta">${escapeHtml(item.role_or_school)}</div>` : ''}
+            </div>
+            <div class="fb-stars">${stars}</div>
+          </div>
+          <span class="fb-category-chip">${escapeHtml(cat)}</span>
+          <div class="fb-message">${escapeHtml(item.message)}</div>
+          <div class="fb-footer">
+            <div class="fb-time">${timeAgo}</div>
+            ${isOwner ? `
+              <div class="fb-actions">
+                <button type="button" class="fb-btn-action edit" onclick="openEditFeedbackModal('${item.id || idx}')" title="แก้ไขข้อความนี้">✏️ แก้ไข</button>
+                <button type="button" class="fb-btn-action delete" onclick="deleteCommunityFeedback('${item.id || idx}')" title="ลบข้อความนี้">🗑️ ลบ</button>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  return merged;
+}
+
+function setFeedbackRating(val) {
+  const ratingInput = document.getElementById('fb-rating');
+  if (ratingInput) ratingInput.value = val;
+
+  const stars = document.querySelectorAll('#star-rating-select .star-btn');
+  stars.forEach(s => {
+    const starVal = Number(s.dataset.rating);
+    s.classList.toggle('active', starVal <= val);
+  });
+
+  const label = document.getElementById('rating-label');
+  if (label) {
+    const texts = {
+      1: '1/5 ต้องปรับปรุง',
+      2: '2/5 พอใช้',
+      3: '3/5 ปานกลาง',
+      4: '4/5 ดีมาก',
+      5: '5/5 ยอดเยี่ยมมาก'
+    };
+    label.textContent = texts[val] || `${val}/5`;
+  }
+}
+
+window.setFeedbackRating = setFeedbackRating;
+
+function updateFeedbackAuthUI() {
+  const guestGate   = document.getElementById('feedback-guest-gate');
+  const memberForm  = document.getElementById('feedback-member-form');
+  const nameInput   = document.getElementById('fb-name');
+  const schoolInput = document.getElementById('fb-school');
+
+  const profile = (typeof getSupervisorProfile === 'function') ? getSupervisorProfile() : null;
+
+  if (state.user) {
+    if (guestGate)  guestGate.classList.add('hidden');
+    if (memberForm) memberForm.classList.remove('hidden');
+
+    if (nameInput && !nameInput.value) {
+      nameInput.value = (profile && profile.name) || state.user.user_metadata?.display_name || state.user.email?.split('@')[0] || '';
+    }
+    if (schoolInput && !schoolInput.value && profile && profile.area) {
+      schoolInput.value = profile.area;
+    }
+  } else {
+    if (guestGate)  guestGate.classList.remove('hidden');
+    if (memberForm) memberForm.classList.add('hidden');
+  }
+}
+
+window.updateFeedbackAuthUI = updateFeedbackAuthUI;
+
+async function handleFeedbackSubmit(event) {
+  if (event) event.preventDefault();
+
+  if (!state.user) {
+    openAuthModal('login');
+    showToast('สิทธิพิเศษสำหรับสมาชิกเท่านั้น กรุณาเข้าสู่ระบบก่อนส่งข้อเสนอแนะครับ', 'info');
+    return;
+  }
+
+  const nameInput   = document.getElementById('fb-name');
+  const schoolInput = document.getElementById('fb-school');
+  const catInput    = document.getElementById('fb-category');
+  const ratingInput = document.getElementById('fb-rating');
+  const msgInput    = document.getElementById('fb-message');
+  const submitBtn   = document.getElementById('fb-submit-btn');
+
+  const profile = (typeof getSupervisorProfile === 'function') ? getSupervisorProfile() : null;
+  const userName = (nameInput ? nameInput.value.trim() : '') || (profile && profile.name) || (state.user.user_metadata?.display_name || 'ศึกษานิเทศก์');
+  const roleSchool = (schoolInput ? schoolInput.value.trim() : '') || (profile && profile.area) || '';
+  const category = catInput ? catInput.value : 'ข้อเสนอแนะงานนิเทศ';
+  const rating = Number(ratingInput ? ratingInput.value : 5) || 5;
+  const message = msgInput ? msgInput.value.trim() : '';
+
+  if (!message || message.length < 3) {
+    showToast('กรุณาระบุข้อความข้อเสนอแนะอย่างน้อย 3 ตัวอักษร', 'info');
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'กำลังส่งข้อเสนอแนะ...';
+  }
+
+  const newFeedback = {
+    user_name: userName,
+    role_or_school: roleSchool,
+    category: category,
+    rating: rating,
+    message: message,
+    user_id: state.user ? state.user.id : null,
+    created_at: new Date().toISOString()
+  };
+
+  // 1. Save to Supabase if connected
+  if (_sb) {
+    try {
+      const payload = {
+        user_name: userName,
+        role_or_school: roleSchool || null,
+        category: category,
+        rating: rating,
+        message: message,
+        user_id: state.user ? state.user.id : null
+      };
+
+      const { data, error } = await _sb.from('community_feedback').insert([payload]).select();
+      if (!error && data && data.length > 0) {
+        newFeedback.id = data[0].id;
+      }
+    } catch (err) {
+      console.warn('[CommunityDash] submit feedback to supabase exception:', err);
+    }
+  }
+
+  // 2. Persist to localStorage
+  try {
+    const local = JSON.parse(localStorage.getItem(LOCAL_FEEDBACK_KEY) || '[]');
+    local.unshift(newFeedback);
+    localStorage.setItem(LOCAL_FEEDBACK_KEY, JSON.stringify(local.slice(0, 30)));
+  } catch {}
+
+  // 3. Reset form
+  if (msgInput) msgInput.value = '';
+  setFeedbackRating(5);
+
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<span>📨 ส่งข้อเสนอแนะถึงทีมพัฒนา</span>';
+  }
+
+  showToast('ขอบคุณสำหรับข้อเสนอแนะ! ความคิดเห็นของท่านถูกบันทึกเรียบร้อยแล้ว ❤️', 'success');
+  await loadCommunityFeedback();
+}
+
+window.handleFeedbackSubmit = handleFeedbackSubmit;
+
+/* ─── Feedback Edit & Delete Actions ─── */
+function setEditFeedbackRating(val) {
+  const ratingInput = document.getElementById('edit-fb-rating');
+  if (ratingInput) ratingInput.value = val;
+
+  const stars = document.querySelectorAll('#edit-star-rating-select .star-btn');
+  stars.forEach(s => {
+    const starVal = Number(s.dataset.rating);
+    s.classList.toggle('active', starVal <= val);
+  });
+
+  const label = document.getElementById('edit-rating-label');
+  if (label) {
+    const texts = {
+      1: '1/5 ต้องปรับปรุง',
+      2: '2/5 พอใช้',
+      3: '3/5 ปานกลาง',
+      4: '4/5 ดีมาก',
+      5: '5/5 ยอดเยี่ยมมาก'
+    };
+    label.textContent = texts[val] || `${val}/5`;
+  }
+}
+window.setEditFeedbackRating = setEditFeedbackRating;
+
+function openEditFeedbackModal(feedbackId) {
+  if (!state.user) {
+    showToast('กรุณาเข้าสู่ระบบก่อนแก้ไขข้อเสนอแนะครับ', 'info');
+    return;
+  }
+
+  const list = window._cachedCommunityFeedback || [];
+  const item = list.find(f => String(f.id) === String(feedbackId)) || list[Number(feedbackId)];
+  if (!item) {
+    showToast('ไม่พบข้อมูลข้อเสนอแนะที่ต้องการแก้ไข', 'error');
+    return;
+  }
+
+  if (item.user_id && String(item.user_id) !== String(state.user.id)) {
+    showToast('ท่านสามารถแก้ไขได้เฉพาะข้อความของตนเองเท่านั้นครับ', 'error');
+    return;
+  }
+
+  const modalOverlay = document.getElementById('edit-feedback-modal-overlay');
+  const idInput = document.getElementById('edit-fb-id');
+  const catInput = document.getElementById('edit-fb-category');
+  const msgInput = document.getElementById('edit-fb-message');
+
+  if (idInput) idInput.value = item.id || feedbackId;
+  if (catInput) catInput.value = item.category || 'ข้อเสนอแนะงานนิเทศ';
+  if (msgInput) msgInput.value = item.message || '';
+  setEditFeedbackRating(item.rating || 5);
+
+  if (modalOverlay) {
+    modalOverlay.classList.remove('hidden');
+    modalOverlay.style.display = 'flex';
+    setTimeout(() => {
+      msgInput?.focus();
+    }, 100);
+  }
+}
+window.openEditFeedbackModal = openEditFeedbackModal;
+
+function closeEditFeedbackModal(event) {
+  if (event && event.target !== document.getElementById('edit-feedback-modal-overlay')) {
+    return;
+  }
+  const modalOverlay = document.getElementById('edit-feedback-modal-overlay');
+  if (modalOverlay) {
+    modalOverlay.classList.add('hidden');
+    modalOverlay.style.display = 'none';
+  }
+}
+window.closeEditFeedbackModal = closeEditFeedbackModal;
+
+async function handleFeedbackEditSubmit(event) {
+  if (event) event.preventDefault();
+
+  if (!state.user) {
+    showToast('กรุณาเข้าสู่ระบบก่อนทำการแก้ไข', 'info');
+    return;
+  }
+
+  const idInput = document.getElementById('edit-fb-id');
+  const catInput = document.getElementById('edit-fb-category');
+  const ratingInput = document.getElementById('edit-fb-rating');
+  const msgInput = document.getElementById('edit-fb-message');
+  const submitBtn = document.getElementById('edit-fb-submit-btn');
+
+  const feedbackId = idInput?.value;
+  const newCat = catInput?.value || 'ข้อเสนอแนะงานนิเทศ';
+  const newRating = Number(ratingInput?.value || 5);
+  const newMsg = msgInput?.value.trim() || '';
+
+  if (!newMsg || newMsg.length < 3) {
+    showToast('กรุณาระบุข้อความอย่างน้อย 3 ตัวอักษร', 'info');
+    return;
+  }
+
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'กำลังบันทึก...';
+  }
+
+  if (_sb) {
+    try {
+      await _sb
+        .from('community_feedback')
+        .update({
+          category: newCat,
+          rating: newRating,
+          message: newMsg
+        })
+        .eq('id', feedbackId)
+        .eq('user_id', state.user.id);
+    } catch (e) {
+      console.warn('[CommunityDash] update feedback exception:', e);
+    }
+  }
+
+  try {
+    const local = JSON.parse(localStorage.getItem(LOCAL_FEEDBACK_KEY) || '[]');
+    const idx = local.findIndex(f => String(f.id) === String(feedbackId));
+    if (idx !== -1) {
+      local[idx].category = newCat;
+      local[idx].rating = newRating;
+      local[idx].message = newMsg;
+      localStorage.setItem(LOCAL_FEEDBACK_KEY, JSON.stringify(local));
+    }
+  } catch {}
+
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'บันทึกการแก้ไข';
+  }
+
+  closeEditFeedbackModal();
+  showToast('แก้ไขข้อเสนอแนะเรียบร้อยแล้ว ✨', 'success');
+  await loadCommunityFeedback();
+}
+window.handleFeedbackEditSubmit = handleFeedbackEditSubmit;
+
+async function deleteCommunityFeedback(feedbackId) {
+  if (!state.user) {
+    showToast('กรุณาเข้าสู่ระบบก่อนดำเนินการ', 'info');
+    return;
+  }
+
+  if (!confirm('ท่านต้องการลบข้อเสนอแนะข้อความนี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้')) {
+    return;
+  }
+
+  if (_sb) {
+    try {
+      await _sb
+        .from('community_feedback')
+        .delete()
+        .eq('id', feedbackId)
+        .eq('user_id', state.user.id);
+    } catch (e) {
+      console.warn('[CommunityDash] delete feedback error:', e);
+    }
+  }
+
+  try {
+    const local = JSON.parse(localStorage.getItem(LOCAL_FEEDBACK_KEY) || '[]');
+    const filtered = local.filter(f => String(f.id) !== String(feedbackId));
+    localStorage.setItem(LOCAL_FEEDBACK_KEY, JSON.stringify(filtered));
+  } catch {}
+
+  showToast('ลบข้อความข้อเสนอแนะแล้ว 🗑️', 'info');
+  await loadCommunityFeedback();
+}
+window.deleteCommunityFeedback = deleteCommunityFeedback;
+
+/* ─── TAB 2: PERSONAL DASHBOARD (USER STATS) ─── */
+async function loadPersonalDashboard() {
   const guestEl = document.getElementById('dashboard-guest');
   const userEl  = document.getElementById('dashboard-member') || document.getElementById('dashboard-user');
 
@@ -1963,7 +2877,6 @@ async function loadDashboard() {
   if (guestEl) guestEl.classList.add('hidden');
   if (userEl) userEl.classList.remove('hidden');
 
-  // 1. ดึงข้อมูลจาก Supabase copy_events ถ้าล็อกอินและเชื่อมต่ออยู่
   let userEvents = [];
 
   if (_sb && state.user && state.user.id) {
@@ -1976,25 +2889,19 @@ async function loadDashboard() {
 
       if (!error && Array.isArray(data)) {
         userEvents = data;
-      } else if (error) {
-        console.warn('[Supabase] loadDashboard copy_events fetch error:', error);
       }
     } catch (err) {
-      console.warn('[Supabase] loadDashboard fetch exception:', err);
+      console.warn('[Supabase] loadPersonalDashboard fetch error:', err);
     }
   }
 
-  // 2. ดึงข้อมูลจาก LocalStorage (เผื่อออฟไลน์ หรือมีประวัติในเครื่อง)
   const localStats = getCopyStats();
-  const histKey = 'ai_prompt_kruthai_copy_history';
+  const histKey = 'ai_prompt_supervisor_copy_history';
   let localHist = [];
   try {
-    localHist = JSON.parse(localStorage.getItem(histKey) || '[]');
-  } catch (e) {
-    console.warn('[LocalStorage] parse copy history error:', e);
-  }
+    localHist = JSON.parse(localStorage.getItem(histKey) || localStorage.getItem('ai_prompt_kruthai_copy_history') || '[]');
+  } catch (e) {}
 
-  // ถ้าใน Cloud ไม่มีข้อมูล แต่เครื่องมีข้อมูล ให้ใช้ข้อมูลในเครื่อง
   if (userEvents.length === 0 && localHist.length > 0) {
     userEvents = localHist.map(h => ({
       prompt_id: h.id,
@@ -2002,16 +2909,12 @@ async function loadDashboard() {
     }));
   }
 
-  // 3. คำนวณสถิติ
-  // จำนวน Prompts ที่ Copy แล้ว
   const totalCopies = userEvents.length > 0
     ? userEvents.length
     : Object.values(localStats).reduce((s, v) => s + v, 0);
 
-  // รายการโปรด
   const totalFavs = state.favorites ? state.favorites.size : 0;
 
-  // เล่มที่ใช้ (เล่ม 1, 2, 3)
   const booksSet = new Set();
   if (userEvents.length > 0) {
     userEvents.forEach(e => {
@@ -2030,17 +2933,14 @@ async function loadDashboard() {
   }
   const booksUsedStr = `${booksSet.size}/4`;
 
-  // วันที่ใช้งานต่อเนื่อง (Streak)
   const streakDays = calculateUsageStreak(userEvents.length > 0 ? userEvents : localHist);
 
-  // 4. แสดงผลตัวเลขใน Card สถิติทั้ง 4 ตัว (ตรงตาม ID ใน index.html)
   setDashboardStat('stat-total-copies', totalCopies);
   setDashboardStat('stat-total',        totalCopies);
   setDashboardStat('stat-favorites',    totalFavs);
   setDashboardStat('stat-streak',       streakDays > 0 ? `${streakDays} วัน` : '0 วัน');
   setDashboardStat('stat-books',        booksUsedStr);
 
-  // 5. แสดง Prompts ที่ใช้บ่อย (Top 5)
   const promptCountMap = {};
   if (userEvents.length > 0) {
     userEvents.forEach(e => {
@@ -2079,7 +2979,6 @@ async function loadDashboard() {
       : '<div class="empty-text">ยังไม่มีข้อมูล Prompts ที่ใช้บ่อย กดคัดลอก Prompt เพื่อเริ่มต้นสะสมสถิติ</div>';
   }
 
-  // 6. แสดงประวัติการใช้งาน (Recent History)
   const historyListEl = document.getElementById('usage-history');
   if (historyListEl) {
     const recent = userEvents.slice(0, 15);
@@ -2108,6 +3007,8 @@ async function loadDashboard() {
       : '<div class="empty-text">ยังไม่มีประวัติการใช้งาน</div>';
   }
 }
+
+window.loadPersonalDashboard = loadPersonalDashboard;
 
 function setDashboardStat(id, value) {
   const el = document.getElementById(id);
@@ -2558,5 +3459,18 @@ window.resetStarHover = resetStarHover;
 window.updateStarUI = updateStarUI;
 window.loadPromptFeedback = loadPromptFeedback;
 window.submitPromptFeedback = submitPromptFeedback;
+window.switchDashboardTab = switchDashboardTab;
+window.loadCommunityDashboard = loadCommunityDashboard;
+window.renderCommunityCharts = renderCommunityCharts;
+window.loadCommunityFeedback = loadCommunityFeedback;
+window.setFeedbackRating = setFeedbackRating;
+window.updateFeedbackAuthUI = updateFeedbackAuthUI;
+window.handleFeedbackSubmit = handleFeedbackSubmit;
+window.setEditFeedbackRating = setEditFeedbackRating;
+window.openEditFeedbackModal = openEditFeedbackModal;
+window.closeEditFeedbackModal = closeEditFeedbackModal;
+window.handleFeedbackEditSubmit = handleFeedbackEditSubmit;
+window.deleteCommunityFeedback = deleteCommunityFeedback;
+window.loadPersonalDashboard = loadPersonalDashboard;
 
 

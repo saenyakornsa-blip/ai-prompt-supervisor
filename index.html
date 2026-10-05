@@ -215,47 +215,242 @@
     </div>
 
     <div id="view-dashboard" class="view hidden">
-      <div class="view-header"><h2>📊 สถิติการใช้งาน</h2></div>
-      <div id="dashboard-guest" class="dashboard-guest">
-        <div class="guest-card">
-          <div class="guest-icon">📊</div>
-          <h3>ติดตามสถิติการใช้งานของคุณ</h3>
-          <p>สมัครสมาชิกฟรีเพื่อดูจำนวนครั้งที่คัดลอก Prompt, การเข้าใช้งานต่อเนื่อง (Streak) และประวัติ Prompt ที่ใช้งานบ่อย</p>
-          <button class="btn-primary" onclick="openAuthModal('signup')">สมัครสมาชิกฟรี</button>
+      <!-- Dashboard Header with Sub-tabs -->
+      <div class="dash-header-wrap">
+        <div class="view-header">
+          <h2>📊 แดชบอร์ด &amp; สถิติระบบ</h2>
+          <p class="text-muted">ข้อมูลสถิติเครือข่ายศึกษานิเทศก์แบบเรียลไทม์จากฐานข้อมูล Supabase และบันทึกสถิติส่วนบุคคล</p>
+        </div>
+        <div class="dash-tabs" role="tablist">
+          <button class="dash-tab-btn active" id="dash-tab-community-btn" onclick="switchDashboardTab('community')">
+            <span class="tab-icon">🌐</span> ภาพรวมเครือข่าย ศน. (Live)
+          </button>
+          <button class="dash-tab-btn" id="dash-tab-personal-btn" onclick="switchDashboardTab('personal')">
+            <span class="tab-icon">👤</span> สถิติของฉัน
+          </button>
         </div>
       </div>
-      <div id="dashboard-member" class="dashboard-member hidden">
-        <div class="dashboard-grid">
-          <div class="dashboard-card">
-            <div class="d-card-icon">📋</div>
-            <div class="d-card-num" id="stat-total-copies">0</div>
-            <div class="d-card-label">Prompt ที่คัดลอกทั้งหมด</div>
+
+      <!-- ======================================================= -->
+      <!-- TAB 1: COMMUNITY DYNAMIC DASHBOARD                      -->
+      <!-- ======================================================= -->
+      <div id="dash-tab-community" class="dash-tab-content">
+        <!-- Live Status Bar -->
+        <div class="live-indicator-bar">
+          <div class="live-status-info">
+            <span class="live-dot pulse"></span>
+            <span class="live-text" id="live-sync-text">เชื่อมต่อข้อมูลสดกับ Supabase เรียบร้อยแล้ว</span>
           </div>
-          <div class="dashboard-card">
-            <div class="d-card-icon">⭐</div>
-            <div class="d-card-num" id="stat-favorites">0</div>
-            <div class="d-card-label">รายการโปรดที่บันทึก</div>
+          <button class="btn-refresh-dash" onclick="loadCommunityDashboard(true)" title="รีเฟรชข้อมูล">🔄 อัปเดตข้อมูลสด</button>
+        </div>
+
+        <!-- 4 Key Community Metrics -->
+        <div class="dashboard-grid community-metrics-grid">
+          <div class="dashboard-card comm-card">
+            <div class="d-card-icon" style="background: rgba(79, 70, 229, 0.1); color: #4F46E5;">👥</div>
+            <div class="d-card-num" id="comm-stat-members">--</div>
+            <div class="d-card-label">ศึกษานิเทศก์ในระบบ</div>
+            <div class="d-card-sub text-muted">ครอบคลุมทุกสังกัด สพป. สพม. สช. อปท. สอศ.</div>
           </div>
-          <div class="dashboard-card">
-            <div class="d-card-icon">🔥</div>
-            <div class="d-card-num" id="stat-streak">0 วัน</div>
-            <div class="d-card-label">วันใช้งานต่อเนื่อง</div>
+          <div class="dashboard-card comm-card">
+            <div class="d-card-icon" style="background: rgba(5, 150, 105, 0.1); color: #059669;">📋</div>
+            <div class="d-card-num" id="comm-stat-copies">--</div>
+            <div class="d-card-label">ยอดคัดลอก Prompt รวม</div>
+            <div class="d-card-sub text-muted">นำไปขับเคลื่อนงานนิเทศ นโยบาย และสถานศึกษา</div>
           </div>
-          <div class="dashboard-card">
-            <div class="d-card-icon">📚</div>
-            <div class="d-card-num" id="stat-books">0/4</div>
-            <div class="d-card-label">หมวดเล่มที่ใช้งาน</div>
+          <div class="dashboard-card comm-card">
+            <div class="d-card-icon" style="background: rgba(245, 158, 11, 0.1); color: #D97706;">⭐</div>
+            <div class="d-card-num" id="comm-stat-favs">--</div>
+            <div class="d-card-label">บันทึกรายการโปรดรวม</div>
+            <div class="d-card-sub text-muted">Prompt ยอดฮิตที่ ศน. บันทึกเก็บไว้ใช้งานประจำ</div>
+          </div>
+          <div class="dashboard-card comm-card">
+            <div class="d-card-icon" style="background: rgba(220, 38, 38, 0.1); color: #DC2626;">💬</div>
+            <div class="d-card-num" id="comm-stat-feedback">--</div>
+            <div class="d-card-label">เสียงสะท้อน &amp; ข้อเสนอแนะ</div>
+            <div class="d-card-sub text-muted">ความคิดเห็นร่วมพัฒนาคลังสื่อและเครื่องมือนิเทศ</div>
           </div>
         </div>
 
-        <div class="dashboard-section">
-          <h3>⭐ 5 อันดับ Prompts ที่คุณใช้งานบ่อยที่สุด</h3>
-          <div id="top-prompts-list"></div>
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+          <!-- Chart 1: Top 10 Popular Prompts (Horizontal Bar Chart) -->
+          <div class="chart-card chart-card-wide">
+            <div class="chart-card-header">
+              <div class="chart-title-wrap">
+                <span class="chart-badge">ยอดนิยม</span>
+                <h3>🏆 10 อันดับ Prompt ที่มีศึกษานิเทศก์คัดลอกสูงสุด</h3>
+              </div>
+              <span class="chart-hint">💡 คลิกที่แถบเพื่อเปิด Prompt นั้นทันที</span>
+            </div>
+            <div class="chart-canvas-wrap" style="height: 340px; position: relative;">
+              <canvas id="chartTopPrompts"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 2: Book Usage Distribution (Doughnut Chart) -->
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div class="chart-title-wrap">
+                <span class="chart-badge book-badge">สัดส่วน 4 เล่ม</span>
+                <h3>🍩 สัดส่วนการใช้งาน 4 เล่มคู่มือ</h3>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap" style="height: 270px; position: relative;">
+              <canvas id="chartBookUsage"></canvas>
+            </div>
+            <div class="chart-legend-custom" id="book-usage-legend"></div>
+          </div>
+
+          <!-- Chart 3: 7-Day Usage Activity Trend (Line / Area Chart) -->
+          <div class="chart-card">
+            <div class="chart-card-header">
+              <div class="chart-title-wrap">
+                <span class="chart-badge trend-badge">แนวโน้ม</span>
+                <h3>📈 กิจกรรมการใช้งาน 7 วันล่าสุด</h3>
+              </div>
+            </div>
+            <div class="chart-canvas-wrap" style="height: 270px; position: relative;">
+              <canvas id="chartDailyTrend"></canvas>
+            </div>
+          </div>
         </div>
 
-        <div class="dashboard-section">
-          <h3>🕒 ประวัติการใช้งานล่าสุด</h3>
-          <div id="usage-history"></div>
+        <!-- Section: Feedback & Suggestions System -->
+        <div class="dashboard-section community-feedback-section">
+          <div class="section-title-wrap">
+            <div class="section-badge">ร่วมพัฒนา</div>
+            <h3>💬 ข้อเสนอแนะและเสียงสะท้อนจากศึกษานิเทศก์</h3>
+            <p class="text-muted">ร่วมแชร์ประสบการณ์ แนะนำบริบทการนิเทศ หรือขอหัวข้อ Prompt ที่ท่านอยากให้จัดทำเพิ่มเติม</p>
+          </div>
+
+          <div class="feedback-grid">
+            <!-- Form to Submit Feedback (Members only) -->
+            <div class="feedback-form-card">
+              <!-- Guest Gate: Visible when user is not logged in -->
+              <div id="feedback-guest-gate" class="feedback-gate-box">
+                <div class="gate-icon-badge">🔒</div>
+                <h4>สิทธิพิเศษสำหรับสมาชิก</h4>
+                <p>ร่วมแบ่งปันประสบการณ์งานนิเทศ แนะนำการใช้งาน หรือขอ Prompt เพิ่มเติมได้เมื่อเข้าสู่ระบบ</p>
+                <div class="gate-actions-row">
+                  <button class="btn-primary" onclick="openAuthModal('login')">เข้าสู่ระบบ</button>
+                  <button class="btn-secondary" onclick="openAuthModal('signup')">สมัครสมาชิกฟรี</button>
+                </div>
+                <div class="gate-subnote">💡 ศึกษานิเทศก์ทั่วไปสามารถอ่านข้อเสนอแนะของเพื่อน ศน. ได้ทางด้านขวา</div>
+              </div>
+
+              <!-- Member Form: Visible when user is logged in -->
+              <div id="feedback-member-form" class="hidden">
+                <div class="member-form-header">
+                  <h4>✍️ ส่งข้อเสนอแนะ / ขอ Prompt เพิ่มเติม</h4>
+                  <span class="member-badge-pill">สมาชิก ศน.</span>
+                </div>
+                <form id="feedback-form" onsubmit="handleFeedbackSubmit(event)">
+                  <div class="form-group-dash">
+                    <label for="fb-name">ชื่อของท่าน (หรือนามแฝง):</label>
+                    <input type="text" id="fb-name" placeholder="เช่น ศน.สมหมาย หรือ ศน.กลุ่มนิเทศฯ" required maxlength="50" />
+                  </div>
+                  <div class="form-row-dash">
+                    <div class="form-group-dash">
+                      <label for="fb-school">สังกัด / สำนักงานเขตพื้นที่ฯ / กลุ่มงาน:</label>
+                      <input type="text" id="fb-school" placeholder="เช่น สพป.เชียงใหม่ เขต 1 หรือ กลุ่มนิเทศฯ" maxlength="80" />
+                    </div>
+                    <div class="form-group-dash">
+                      <label for="fb-category">หมวดหมู่:</label>
+                      <select id="fb-category">
+                        <option value="ข้อเสนอแนะงานนิเทศ">💡 ข้อเสนอแนะงานนิเทศ</option>
+                        <option value="ขอ Prompt ภารกิจเพิ่ม">📝 ขอ Prompt ภารกิจเพิ่ม</option>
+                        <option value="แชร์ไอเดียการนำไปใช้">🌟 แชร์ไอเดียการนำไปใช้</option>
+                        <option value="ชื่นชม & ให้กำลังใจ">❤️ ชื่นชม &amp; ให้กำลังใจ</option>
+                        <option value="แจ้งปัญหาการใช้งาน">⚠️ แจ้งปัญหาการใช้งาน</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="form-group-dash">
+                    <label>ความพึงพอใจต่อแอปพลิเคชัน:</label>
+                    <div class="star-rating-select" id="star-rating-select">
+                      <span class="star-btn active" data-rating="1" onclick="setFeedbackRating(1)">★</span>
+                      <span class="star-btn active" data-rating="2" onclick="setFeedbackRating(2)">★</span>
+                      <span class="star-btn active" data-rating="3" onclick="setFeedbackRating(3)">★</span>
+                      <span class="star-btn active" data-rating="4" onclick="setFeedbackRating(4)">★</span>
+                      <span class="star-btn active" data-rating="5" onclick="setFeedbackRating(5)">★</span>
+                      <span class="rating-label" id="rating-label">5/5 ยอดเยี่ยมมาก</span>
+                    </div>
+                    <input type="hidden" id="fb-rating" value="5" />
+                  </div>
+                  <div class="form-group-dash">
+                    <label for="fb-message">ข้อความ / คำแนะนำของท่าน:</label>
+                    <textarea id="fb-message" rows="3" placeholder="พิมพ์ข้อความแนะนำ หรือระบุภารกิจ Prompt ที่ต้องการให้ทีมงานจัดทำเพิ่ม..." required minlength="3" maxlength="1000"></textarea>
+                  </div>
+                  <button type="submit" class="btn-primary full" id="fb-submit-btn">
+                    <span>📨 ส่งข้อเสนอแนะถึงทีมพัฒนา</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <!-- Feedback Feed / List -->
+            <div class="feedback-feed-card">
+              <div class="feed-header">
+                <h4>🌟 เสียงสะท้อนล่าสุดจากเพื่อนศึกษานิเทศก์</h4>
+                <span class="feed-count-badge" id="feedback-feed-count">0 ข้อความ</span>
+              </div>
+              <div class="feedback-items-container" id="feedback-items-container">
+                <div class="loading-state-dash">กำลังโหลดข้อเสนอแนะ...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ======================================================= -->
+      <!-- TAB 2: MY PERSONAL STATS (USER / GUEST DASHBOARD)       -->
+      <!-- ======================================================= -->
+      <div id="dash-tab-personal" class="dash-tab-content hidden">
+        <div id="dashboard-guest" class="dashboard-guest">
+          <div class="guest-card">
+            <div class="guest-icon">📊</div>
+            <h3>ติดตามสถิติการใช้งานของคุณ</h3>
+            <p>สมัครสมาชิกฟรีเพื่อดูจำนวนครั้งที่คัดลอก Prompt, การเข้าใช้งานต่อเนื่อง (Streak) และประวัติ Prompt ที่ใช้งานบ่อย</p>
+            <div style="display:flex; gap:10px; justify-content:center; margin-top:14px;">
+              <button class="btn-primary" onclick="openAuthModal('login')">เข้าสู่ระบบ</button>
+              <button class="btn-secondary" onclick="openAuthModal('signup')">สมัครสมาชิกฟรี</button>
+            </div>
+          </div>
+        </div>
+        <div id="dashboard-member" class="dashboard-member hidden">
+          <div class="dashboard-grid">
+            <div class="dashboard-card">
+              <div class="d-card-icon">📋</div>
+              <div class="d-card-num" id="stat-total-copies">0</div>
+              <div class="d-card-label">Prompt ที่คัดลอกทั้งหมด</div>
+            </div>
+            <div class="dashboard-card">
+              <div class="d-card-icon">⭐</div>
+              <div class="d-card-num" id="stat-favorites">0</div>
+              <div class="d-card-label">รายการโปรดที่บันทึก</div>
+            </div>
+            <div class="dashboard-card">
+              <div class="d-card-icon">🔥</div>
+              <div class="d-card-num" id="stat-streak">0 วัน</div>
+              <div class="d-card-label">วันใช้งานต่อเนื่อง</div>
+            </div>
+            <div class="dashboard-card">
+              <div class="d-card-icon">📚</div>
+              <div class="d-card-num" id="stat-books">0/4</div>
+              <div class="d-card-label">หมวดเล่มที่ใช้งาน</div>
+            </div>
+          </div>
+
+          <div class="dashboard-section">
+            <h3>⭐ 5 อันดับ Prompts ที่คุณใช้งานบ่อยที่สุด</h3>
+            <div id="top-prompts-list"></div>
+          </div>
+
+          <div class="dashboard-section">
+            <h3>🕒 ประวัติการใช้งานล่าสุด</h3>
+            <div id="usage-history"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -690,7 +885,53 @@
   </div>
 </div>
 
+<!-- EDIT FEEDBACK MODAL -->
+<div class="modal-overlay hidden" id="edit-feedback-modal-overlay" onclick="closeEditFeedbackModal(event)">
+  <div class="modal auth-modal" id="edit-feedback-modal" style="max-width: 500px;">
+    <button class="modal-close" onclick="closeEditFeedbackModal()">✕</button>
+    <div class="auth-header">
+      <div class="auth-logo">✏️</div>
+      <h2>แก้ไขข้อเสนอแนะ</h2>
+      <p>ปรับปรุงข้อความหรือคะแนนความพึงพอใจ</p>
+    </div>
+    <form id="edit-feedback-form" onsubmit="handleFeedbackEditSubmit(event)">
+      <input type="hidden" id="edit-fb-id" />
+      <div class="form-group-dash" style="margin-bottom: 12px;">
+        <label for="edit-fb-category">หมวดหมู่:</label>
+        <select id="edit-fb-category" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 13.5px; background: var(--card-bg); color: var(--text);">
+          <option value="ข้อเสนอแนะงานนิเทศ">💡 ข้อเสนอแนะงานนิเทศ</option>
+          <option value="ขอ Prompt ภารกิจเพิ่ม">📝 ขอ Prompt ภารกิจเพิ่ม</option>
+          <option value="แชร์ไอเดียการนำไปใช้">🌟 แชร์ไอเดียการนำไปใช้</option>
+          <option value="ชื่นชม & ให้กำลังใจ">❤️ ชื่นชม &amp; ให้กำลังใจ</option>
+          <option value="แจ้งปัญหาการใช้งาน">⚠️ แจ้งปัญหาการใช้งาน</option>
+        </select>
+      </div>
+      <div class="form-group-dash" style="margin-bottom: 12px;">
+        <label>ความพึงพอใจ:</label>
+        <div class="star-rating-select" id="edit-star-rating-select">
+          <span class="star-btn active" data-rating="1" onclick="setEditFeedbackRating(1)">★</span>
+          <span class="star-btn active" data-rating="2" onclick="setEditFeedbackRating(2)">★</span>
+          <span class="star-btn active" data-rating="3" onclick="setEditFeedbackRating(3)">★</span>
+          <span class="star-btn active" data-rating="4" onclick="setEditFeedbackRating(4)">★</span>
+          <span class="star-btn active" data-rating="5" onclick="setEditFeedbackRating(5)">★</span>
+          <span class="rating-label" id="edit-rating-label">5/5 ยอดเยี่ยมมาก</span>
+        </div>
+        <input type="hidden" id="edit-fb-rating" value="5" />
+      </div>
+      <div class="form-group-dash" style="margin-bottom: 16px;">
+        <label for="edit-fb-message">ข้อความของท่าน:</label>
+        <textarea id="edit-fb-message" rows="4" style="width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 13.5px; background: var(--card-bg); color: var(--text); resize: vertical; box-sizing: border-box;" required minlength="3" maxlength="1000"></textarea>
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button type="button" class="btn-secondary" onclick="closeEditFeedbackModal()" style="padding: 9px 18px;">ยกเลิก</button>
+        <button type="submit" class="btn-primary" id="edit-fb-submit-btn" style="padding: 9px 20px;">บันทึกการแก้ไข</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="data/prompts.js?v=1.0.0"></script>
 <script src="config.js?v=1.0.0"></script>
 <script src="access.js?v=1.0.0"></script>

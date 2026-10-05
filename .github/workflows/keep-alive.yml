@@ -2,16 +2,34 @@ name: Supabase Keep Alive
 
 on:
   schedule:
-    # รันอัตโนมัติทุกๆ 3 วัน เวลา 00:00 UTC
-    - cron: '0 0 */3 * *'
-  workflow_dispatch: # ปุ่มสำหรับกดรันด้วยตนเองได้ตลอดเวลา
+    # รันอัตโนมัติทุกๆ 2 วัน เวลา 04:00 UTC (11:00 น. เวลาไทย) เพื่อป้องกัน Supabase Pause
+    - cron: '0 4 */2 * *'
+  workflow_dispatch: # ปุ่มสำหรับกดรันด้วยตนเองจาก GitHub Actions ได้ตลอดเวลา
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase Project
+      - name: Keep Supabase Active via Genuine Database Query
+        env:
+          SUPABASE_URL: 'https://bgthbihseqglxzsfguqy.supabase.co'
+          ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJndGhiaWhzZXFnbHh6c2ZndXF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwOTI3ODUsImV4cCI6MjEwNDY2ODc4NX0.P70FCUiwPl_zeeirp7wLPNwJB0qpQ5tpMk825e01ueU' }}
         run: |
-          curl -i -X GET 'https://bgthbihseqglxzsfguqy.supabase.co/rest/v1/' \
-          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
+          echo "Pinging Supabase Database..."
+          # 1. ยิงคิวรีไปยังตารางจริง เพื่อให้ Postgres บันทึก Activity ป้องกัน Auto-Pause
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${SUPABASE_URL}/rest/v1/prompt_ratings?select=id&limit=1" \
+            -H "apikey: ${ANON_KEY}" \
+            -H "Authorization: Bearer ${ANON_KEY}")
+          echo "Database Query HTTP Status: $STATUS"
+
+          # 2. ตรวจสอบสถานะ Auth Service
+          AUTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${SUPABASE_URL}/auth/v1/health" \
+            -H "apikey: ${ANON_KEY}")
+          echo "Auth Service HTTP Status: $AUTH_STATUS"
+
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 400 ]; then
+            echo "✅ Supabase is active and query succeeded!"
+          else
+            echo "⚠️ Warning: Response status code $STATUS"
+            exit 1
+          fi

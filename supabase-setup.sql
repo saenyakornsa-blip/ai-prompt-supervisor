@@ -51,19 +51,34 @@ CREATE TABLE IF NOT EXISTS public.copy_events (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   prompt_id TEXT NOT NULL,
+  book_number INT,
+  chapter_number INT,
+  session_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- เพิ่มคอลัมน์ในกรณีที่สร้างตารางไว้ก่อนแล้ว
+ALTER TABLE public.copy_events 
+  ADD COLUMN IF NOT EXISTS book_number INT,
+  ADD COLUMN IF NOT EXISTS chapter_number INT,
+  ADD COLUMN IF NOT EXISTS session_id TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_copy_events_prompt_id ON public.copy_events(prompt_id);
 CREATE INDEX IF NOT EXISTS idx_copy_events_user_id ON public.copy_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_copy_events_book_number ON public.copy_events(book_number);
 
 ALTER TABLE public.copy_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Allow insert copy events" ON public.copy_events;
 CREATE POLICY "Allow insert copy events" ON public.copy_events
-  FOR INSERT WITH CHECK (true);
+  FOR INSERT TO anon, authenticated
+  WITH CHECK (true);
 
-CREATE POLICY "Users can read own copy events" ON public.copy_events
-  FOR SELECT USING (auth.uid() = user_id OR user_id IS NULL);
+DROP POLICY IF EXISTS "Users can read own copy events" ON public.copy_events;
+DROP POLICY IF EXISTS "Anyone can read copy events" ON public.copy_events;
+CREATE POLICY "Anyone can read copy events" ON public.copy_events
+  FOR SELECT TO anon, authenticated
+  USING (true);
 
 -- 3. Favorites Table (ซิงก์รายการโปรดข้ามอุปกรณ์)
 CREATE TABLE IF NOT EXISTS public.favorites (

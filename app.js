@@ -637,7 +637,18 @@ async function _doCopyPrompt(p) {
 
     _sb.from('copy_events').insert(copyData).then(({ error }) => {
       if (error) {
-        console.warn('[Supabase] copy_events insert error:', error);
+        console.warn('[Supabase] copy_events insert with full payload error, falling back to minimal payload:', error);
+        _sb.from('copy_events').insert({
+          prompt_id: promptId,
+          user_id: (state.user && state.user.id) ? state.user.id : null
+        }).then(({ error: fbErr }) => {
+          if (fbErr) {
+            console.warn('[Supabase] copy_events fallback insert error:', fbErr);
+          } else {
+            console.log('[Supabase] Logged copy event (fallback) for', promptId);
+            if (state.currentView === 'dashboard') loadDashboard();
+          }
+        });
       } else {
         console.log('[Supabase] Logged copy event for', promptId);
         if (state.currentView === 'dashboard') loadDashboard();
@@ -669,14 +680,22 @@ async function _doCopyPrompt(p) {
 
 function logCopyEvent(promptId) {
   try {
-    const key   = 'ai_prompt_kruthai_copy_stats';
-    const stats = JSON.parse(localStorage.getItem(key) || '{}');
+    const key = 'ai_prompt_supervisor_copy_stats';
+    const legacyKey = 'ai_prompt_kruthai_copy_stats';
+    let stats = {};
+    try {
+      stats = JSON.parse(localStorage.getItem(key) || localStorage.getItem(legacyKey) || '{}');
+    } catch {}
     stats[promptId] = (stats[promptId] || 0) + 1;
     localStorage.setItem(key, JSON.stringify(stats));
 
     // Also keep a history array (last 50)
-    const histKey = 'ai_prompt_kruthai_copy_history';
-    const hist    = JSON.parse(localStorage.getItem(histKey) || '[]');
+    const histKey = 'ai_prompt_supervisor_copy_history';
+    const legacyHistKey = 'ai_prompt_kruthai_copy_history';
+    let hist = [];
+    try {
+      hist = JSON.parse(localStorage.getItem(histKey) || localStorage.getItem(legacyHistKey) || '[]');
+    } catch {}
     hist.unshift({ id: promptId, ts: Date.now() });
     localStorage.setItem(histKey, JSON.stringify(hist.slice(0, 50)));
     state.copyHistory = hist;
@@ -687,8 +706,51 @@ function logCopyEvent(promptId) {
 
 function getCopyStats() {
   try {
-    return JSON.parse(localStorage.getItem('ai_prompt_kruthai_copy_stats') || '{}');
+    const key = 'ai_prompt_supervisor_copy_stats';
+    const legacyKey = 'ai_prompt_kruthai_copy_stats';
+    return JSON.parse(localStorage.getItem(key) || localStorage.getItem(legacyKey) || '{}');
   } catch { return {}; }
+}
+
+async function syncLocalCopiesToCloud() {
+  if (!_sb) return;
+  try {
+    const syncFlag = localStorage.getItem('ai_prompt_local_copies_synced_v3');
+    if (syncFlag) return;
+
+    const stats = getCopyStats();
+    const pids = Object.keys(stats);
+    if (pids.length === 0) {
+      localStorage.setItem('ai_prompt_local_copies_synced_v3', 'true');
+      return;
+    }
+
+    const payload = [];
+    const userId = (state.user && state.user.id) ? state.user.id : null;
+    pids.forEach(pid => {
+      const count = stats[pid] || 0;
+      for (let i = 0; i < count; i++) {
+        payload.push({
+          prompt_id: pid,
+          user_id: userId
+        });
+      }
+    });
+
+    if (payload.length > 0) {
+      const { error } = await _sb.from('copy_events').insert(payload);
+      if (!error) {
+        console.log(`[Supabase] Synced ${payload.length} local copies to cloud`);
+        localStorage.setItem('ai_prompt_local_copies_synced_v3', 'true');
+      } else {
+        console.warn('[Supabase] syncLocalCopiesToCloud failed:', error);
+      }
+    } else {
+      localStorage.setItem('ai_prompt_local_copies_synced_v3', 'true');
+    }
+  } catch (e) {
+    console.warn('[Supabase] syncLocalCopiesToCloud exception:', e);
+  }
 }
 
 function getOrCreateSessionId() {
@@ -2010,6 +2072,9 @@ async function loadCommunityDashboard(forceRefresh = false) {
   const syncText = document.getElementById('live-sync-text');
   if (syncText) syncText.textContent = 'กำลังซิงค์ข้อมูลสถิติเครือข่าย ศน. จาก Supabase...';
 
+  // Synchronize any local unsynced copy counts to Supabase
+  await syncLocalCopiesToCloud();
+
   // Throttle to prevent excessive calls (unless forced)
   const now = Date.now();
   if (!forceRefresh && now - _lastCommunityFetchTime < 10000 && _communityChartData.topPrompts.length > 0) {
@@ -2077,7 +2142,8 @@ async function loadCommunityDashboard(forceRefresh = false) {
       } catch (e) {}
     }
 
-    // 2. Fetch Top Prompts via RPC or copy_events query
+    // 2. Fetch Top Prompts and Raw Events
+    let rawEvents = null;
     try {
       const { data: topData, error: topErr } = await _sb.rpc('get_top_prompts', { limit_count: 10 });
       if (!topErr && Array.isArray(topData) && topData.length > 0) {
@@ -2092,12 +2158,13 @@ async function loadCommunityDashboard(forceRefresh = false) {
           };
         });
       } else {
-        // Direct query from copy_events
+        // Fallback: Query copy_events directly (only prompt_id & created_at)
         const { data: eventsData, error: evErr } = await _sb
           .from('copy_events')
-          .select('prompt_id, book_number')
-          .limit(1000);
+          .select('prompt_id, created_at')
+          .limit(2000);
         if (!evErr && Array.isArray(eventsData) && eventsData.length > 0) {
+          rawEvents = eventsData;
           const map = {};
           eventsData.forEach(ev => {
             if (ev.prompt_id) map[ev.prompt_id] = (map[ev.prompt_id] || 0) + 1;
@@ -2118,10 +2185,10 @@ async function loadCommunityDashboard(forceRefresh = false) {
         }
       }
     } catch (err) {
-      console.warn('[CommunityDash] get_top_prompts rpc exception:', err);
+      console.warn('[CommunityDash] get_top_prompts exception:', err);
     }
 
-    // 3. Fetch Book Usage Share (4 Books) via RPC or copy_events
+    // 3. Fetch Book Usage Share (4 Books) via RPC or raw events
     try {
       const { data: bData, error: bErr } = await _sb.rpc('get_book_usage_stats');
       if (!bErr && Array.isArray(bData) && bData.length > 0) {
@@ -2132,21 +2199,21 @@ async function loadCommunityDashboard(forceRefresh = false) {
           }
         });
       } else {
-        const { data: bEvents, error: beErr } = await _sb
-          .from('copy_events')
-          .select('book_number');
-        if (!beErr && Array.isArray(bEvents) && bEvents.length > 0) {
-          bEvents.forEach(row => {
-            const b = Number(row.book_number);
+        // Compute from raw events or query
+        const events = rawEvents || (await _sb.from('copy_events').select('prompt_id').limit(2000)).data;
+        if (Array.isArray(events) && events.length > 0) {
+          events.forEach(row => {
+            const p = PROMPTS_DATA.find(x => x.id === row.prompt_id);
+            const b = p ? Number(p.book) : null;
             if (b >= 1 && b <= 4) bookStats[b - 1]++;
           });
         }
       }
     } catch (err) {
-      console.warn('[CommunityDash] get_book_usage_stats rpc exception:', err);
+      console.warn('[CommunityDash] get_book_usage_stats exception:', err);
     }
 
-    // 4. Fetch 7-Day Activity via RPC or copy_events
+    // 4. Fetch 7-Day Activity via RPC or raw events
     try {
       const { data: dData, error: dErr } = await _sb.rpc('get_daily_usage_stats', { days_back: 7 });
       if (!dErr && Array.isArray(dData) && dData.length > 0) {
@@ -2155,20 +2222,45 @@ async function loadCommunityDashboard(forceRefresh = false) {
           return `${d.getDate()}/${d.getMonth() + 1}`;
         });
         dailyStats.data = dData.map(r => Number(r.copy_count) || 0);
+      } else {
+        const events = rawEvents || (await _sb.from('copy_events').select('created_at').limit(2000)).data;
+        if (Array.isArray(events) && events.length > 0) {
+          const dayMap = {};
+          events.forEach(row => {
+            if (row.created_at) {
+              const dStr = row.created_at.split('T')[0];
+              dayMap[dStr] = (dayMap[dStr] || 0) + 1;
+            }
+          });
+          const dayNames = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+          const today = new Date();
+          for (let i = 6; i >= 0; i--) {
+            const d = new Date(today);
+            d.setDate(today.getDate() - i);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const keyDate = `${yyyy}-${mm}-${dd}`;
+            dailyStats.labels.push(`${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`);
+            dailyStats.data.push(dayMap[keyDate] || 0);
+          }
+        }
       }
     } catch (err) {
-      console.warn('[CommunityDash] get_daily_usage_stats rpc exception:', err);
+      console.warn('[CommunityDash] get_daily_usage_stats exception:', err);
     }
   }
 
-  // Combine with local user stats
+  // Combine with local user stats only if offline or Supabase has 0
   const localCopyStats = getCopyStats();
   const localCopiesCount = Object.values(localCopyStats).reduce((a, b) => a + b, 0);
 
   if (totalMembers === 0) {
-    totalMembers = 3; // Actual real users in Supabase auth
+    totalMembers = 5; // Real members in Supabase
   }
-  totalCopies = Math.max(totalCopies, localCopiesCount);
+  if (!_sb || totalCopies === 0) {
+    totalCopies = localCopiesCount;
+  }
   totalFavs = Math.max(totalFavs, state.favorites ? state.favorites.size : 0);
 
   // Load Feedback (both from Supabase and LocalStorage)
@@ -2883,12 +2975,16 @@ async function loadPersonalDashboard() {
     try {
       const { data, error } = await _sb
         .from('copy_events')
-        .select('prompt_id, book_number, chapter_number, copied_at')
+        .select('prompt_id, created_at')
         .eq('user_id', state.user.id)
-        .order('copied_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(data)) {
-        userEvents = data;
+        userEvents = data.map(d => ({
+          prompt_id: d.prompt_id,
+          created_at: d.created_at,
+          copied_at: d.created_at
+        }));
       }
     } catch (err) {
       console.warn('[Supabase] loadPersonalDashboard fetch error:', err);

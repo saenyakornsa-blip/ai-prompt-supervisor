@@ -1803,7 +1803,7 @@ function updateAreaPlaceholder() {
 
   if (org === 'สพป.') areaInput.placeholder = 'เช่น สพป. เชียงใหม่ เขต 1';
   else if (org === 'สพม.') areaInput.placeholder = 'เช่น สพม. กรุงเทพมหานคร เขต 1';
-  else if (org === 'สช.') areaInput.placeholder = 'เช่น สำนักงานการศึกษาเอกชนจังหวัดสงขลา';
+  else if (org === 'ศธจ.') areaInput.placeholder = 'เช่น สำนักงานศึกษาธิการจังหวัดเชียงใหม่';
   else if (org === 'อบจ.') areaInput.placeholder = 'เช่น กองการศึกษา ศาสนาและวัฒนธรรม อบจ.เชียงใหม่';
   else if (org === 'อปท.') areaInput.placeholder = 'เช่น สำนักการศึกษา เทศบาลนครนนทบุรี';
   else if (org === 'สอศ.') areaInput.placeholder = 'เช่น สถาบันการอาชีวศึกษาภาคเหนือ 1';

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT,
   display_name TEXT,
-  affiliation TEXT, -- สังกัด เช่น สพฐ., สช., อปท., สอศ., กทม., ตชด., สกร.
+  affiliation TEXT, -- สังกัด เช่น สพป., สพม., ศธจ., อบจ., อปท., สอศ., กทม., ตชด., สกร.
   role TEXT DEFAULT 'supervisor',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()

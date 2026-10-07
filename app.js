@@ -2076,18 +2076,23 @@ function toggleTheme() {
   const btn = document.getElementById('theme-toggle');
   if (btn) btn.textContent = isDark ? '☀️' : '🌙';
 }
+window.toggleTheme = toggleTheme;
 
 function loadTheme() {
   try {
     const saved = localStorage.getItem('theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (saved === 'dark' || (!saved && prefersDark)) {
+    const isDark = (saved === 'dark' || (!saved && prefersDark));
+    if (isDark) {
       document.body.classList.add('dark-mode');
-      const btn = document.getElementById('theme-toggle');
-      if (btn) btn.textContent = '☀️';
+    } else {
+      document.body.classList.remove('dark-mode');
     }
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = isDark ? '☀️' : '🌙';
   } catch {}
 }
+window.loadTheme = loadTheme;
 
 /* ═══════════════════════════════════════════════════════════════
    18. LEGAL MAP RENDERING
@@ -3382,8 +3387,12 @@ async function init() {
     });
   }
 
-  // 1. Load theme
+  // 1. Load theme & bind toggle
   loadTheme();
+  const themeBtn = document.getElementById('theme-toggle');
+  if (themeBtn) {
+    themeBtn.onclick = toggleTheme;
+  }
 
   // 2. Load favorites from localStorage
   try {

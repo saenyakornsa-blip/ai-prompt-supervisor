@@ -2366,42 +2366,66 @@ async function loadCommunityDashboard(forceRefresh = false) {
       console.warn('[CommunityDash] get_book_usage_stats exception:', err);
     }
 
-    // 4. Fetch 7-Day Activity via RPC or raw events
+    // 4. Fetch 7-Day Activity via RPC or raw events (Always generate full 7-day timeline)
+    const dayNames = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+    const today = new Date();
+    const dateMap = {};
+    const dateKeys = [];
+    const sevenDayLabels = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const keyDate = `${yyyy}-${mm}-${dd}`;
+      dateKeys.push(keyDate);
+      sevenDayLabels.push(`${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`);
+      dateMap[keyDate] = 0;
+    }
+
     try {
       const { data: dData, error: dErr } = await _sb.rpc('get_daily_usage_stats', { days_back: 7 });
       if (!dErr && Array.isArray(dData) && dData.length > 0) {
-        dailyStats.labels = dData.map(r => {
-          const d = new Date(r.usage_date);
-          return `${d.getDate()}/${d.getMonth() + 1}`;
+        dData.forEach(r => {
+          if (!r) return;
+          const count = Number(r.copy_count) || 0;
+          const rawStr = String(r.usage_date || '').substring(0, 10);
+          if (dateMap[rawStr] !== undefined) {
+            dateMap[rawStr] += count;
+          } else {
+            const dObj = new Date(r.usage_date);
+            if (!isNaN(dObj.getTime())) {
+              const y = dObj.getFullYear();
+              const m = String(dObj.getMonth() + 1).padStart(2, '0');
+              const dt = String(dObj.getDate()).padStart(2, '0');
+              const key = `${y}-${m}-${dt}`;
+              if (dateMap[key] !== undefined) {
+                dateMap[key] += count;
+              }
+            }
+          }
         });
-        dailyStats.data = dData.map(r => Number(r.copy_count) || 0);
       } else {
         const events = rawEvents || (await _sb.from('copy_events').select('created_at').limit(2000)).data;
         if (Array.isArray(events) && events.length > 0) {
-          const dayMap = {};
           events.forEach(row => {
             if (row.created_at) {
-              const dStr = row.created_at.split('T')[0];
-              dayMap[dStr] = (dayMap[dStr] || 0) + 1;
+              const dStr = String(row.created_at).substring(0, 10);
+              if (dateMap[dStr] !== undefined) {
+                dateMap[dStr] = (dateMap[dStr] || 0) + 1;
+              }
             }
           });
-          const dayNames = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
-          const today = new Date();
-          for (let i = 6; i >= 0; i--) {
-            const d = new Date(today);
-            d.setDate(today.getDate() - i);
-            const yyyy = d.getFullYear();
-            const mm = String(d.getMonth() + 1).padStart(2, '0');
-            const dd = String(d.getDate()).padStart(2, '0');
-            const keyDate = `${yyyy}-${mm}-${dd}`;
-            dailyStats.labels.push(`${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`);
-            dailyStats.data.push(dayMap[keyDate] || 0);
-          }
         }
       }
     } catch (err) {
       console.warn('[CommunityDash] get_daily_usage_stats exception:', err);
     }
+
+    dailyStats.labels = sevenDayLabels;
+    dailyStats.data = dateKeys.map(k => dateMap[k] || 0);
   }
 
   // Combine with local user stats only if offline or Supabase has 0
@@ -2463,16 +2487,44 @@ async function loadCommunityDashboard(forceRefresh = false) {
     }
   }
 
-  // If dailyStats empty, generate the 7 past days
+  // If dailyStats empty, generate the 7 past days from local history
   if (dailyStats.labels.length === 0) {
     const dayNames = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
     const today = new Date();
+    const localDayMap = {};
+    const localKeys = [];
+    const localLabels = [];
+
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      const label = `${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
-      dailyStats.labels.push(label);
-      dailyStats.data.push(i === 0 ? Math.max(localCopiesCount, 1) : 0);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const keyDate = `${yyyy}-${mm}-${dd}`;
+      localKeys.push(keyDate);
+      localLabels.push(`${dayNames[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`);
+      localDayMap[keyDate] = 0;
+    }
+
+    if (Array.isArray(state.copyHistory) && state.copyHistory.length > 0) {
+      state.copyHistory.forEach(item => {
+        if (item && item.ts) {
+          const d = new Date(item.ts);
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          const k = `${yyyy}-${mm}-${dd}`;
+          if (localDayMap[k] !== undefined) {
+            localDayMap[k]++;
+          }
+        }
+      });
+      dailyStats.labels = localLabels;
+      dailyStats.data = localKeys.map(k => localDayMap[k]);
+    } else {
+      dailyStats.labels = localLabels;
+      dailyStats.data = localKeys.map((k, idx) => idx === 6 ? (localCopiesCount || 0) : 0);
     }
   }
 
@@ -2690,11 +2742,22 @@ function renderCommunityCharts() {
         scales: {
           x: {
             grid: { display: false },
-            ticks: { color: textColor, font: { family: 'Sarabun', size: 11 } }
+            ticks: {
+              color: textColor,
+              font: { family: 'Sarabun', size: 11 },
+              maxRotation: 0,
+              autoSkip: false
+            }
           },
           y: {
+            beginAtZero: true,
+            suggestedMax: 5,
             grid: { color: gridColor },
-            ticks: { color: textColor, font: { family: 'Sarabun' } }
+            ticks: {
+              precision: 0,
+              color: textColor,
+              font: { family: 'Sarabun' }
+            }
           }
         }
       }

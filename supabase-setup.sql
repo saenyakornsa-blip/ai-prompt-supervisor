@@ -31,7 +31,11 @@ CREATE POLICY "Users can insert own profile" ON public.user_profiles
 
 -- Trigger auto-create user_profile on auth signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER 
+LANGUAGE plpgsql 
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   INSERT INTO public.user_profiles (id, email, display_name)
   VALUES (
@@ -42,7 +46,10 @@ BEGIN
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
+
+-- ป้องกันไม่ให้เรียกใช้ trigger function ผ่าน public API
+REVOKE EXECUTE ON FUNCTION public.handle_new_user() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -75,7 +82,7 @@ ALTER TABLE public.copy_events ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow insert copy events" ON public.copy_events;
 CREATE POLICY "Allow insert copy events" ON public.copy_events
   FOR INSERT TO anon, authenticated
-  WITH CHECK (true);
+  WITH CHECK (prompt_id IS NOT NULL AND length(trim(prompt_id)) > 0);
 
 DROP POLICY IF EXISTS "Users can read own copy events" ON public.copy_events;
 DROP POLICY IF EXISTS "Anyone can read copy events" ON public.copy_events;
@@ -96,14 +103,21 @@ CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON public.favorites(user_id);
 
 ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own favorites" ON public.favorites
-  FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can view own favorites" ON public.favorites;
+DROP POLICY IF EXISTS "Anyone can read favorites" ON public.favorites;
+CREATE POLICY "Anyone can read favorites" ON public.favorites
+  FOR SELECT TO anon, authenticated
+  USING (true);
 
+DROP POLICY IF EXISTS "Users can insert own favorites" ON public.favorites;
 CREATE POLICY "Users can insert own favorites" ON public.favorites
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+  FOR INSERT TO authenticated
+  WITH CHECK ((select auth.uid()) = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own favorites" ON public.favorites;
 CREATE POLICY "Users can delete own favorites" ON public.favorites
-  FOR DELETE USING (auth.uid() = user_id);
+  FOR DELETE TO authenticated
+  USING ((select auth.uid()) = user_id);
 
 -- Backward compatibility view (กำหนด security_invoker = true เพื่อไม่ให้ข้าม RLS)
 CREATE OR REPLACE VIEW public.user_favorites WITH (security_invoker = true) AS SELECT * FROM public.favorites;
@@ -124,12 +138,15 @@ CREATE INDEX IF NOT EXISTS idx_prompt_ratings_prompt_id ON public.prompt_ratings
 
 ALTER TABLE public.prompt_ratings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can view ratings" ON public.prompt_ratings;
 CREATE POLICY "Anyone can view ratings" ON public.prompt_ratings
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can insert or update own ratings" ON public.prompt_ratings;
 CREATE POLICY "Users can insert or update own ratings" ON public.prompt_ratings
-  FOR ALL USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  FOR ALL TO authenticated
+  USING ((select auth.uid()) = user_id)
+  WITH CHECK ((select auth.uid()) = user_id);
 
 -- Backward compatibility view (กำหนด security_invoker = true เพื่อไม่ให้ข้าม RLS)
 CREATE OR REPLACE VIEW public.user_feedback WITH (security_invoker = true) AS SELECT * FROM public.prompt_ratings;
@@ -168,18 +185,18 @@ CREATE POLICY "Anyone can read feedback" ON public.community_feedback
 DROP POLICY IF EXISTS "Authenticated users can insert feedback" ON public.community_feedback;
 CREATE POLICY "Authenticated users can insert feedback" ON public.community_feedback
   FOR INSERT TO authenticated
-  WITH CHECK (auth.uid() = user_id AND message IS NOT NULL AND length(message) >= 3);
+  WITH CHECK ((select auth.uid()) = user_id AND message IS NOT NULL AND length(message) >= 3);
 
 DROP POLICY IF EXISTS "Users can update own feedback" ON public.community_feedback;
 CREATE POLICY "Users can update own feedback" ON public.community_feedback
   FOR UPDATE TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id AND message IS NOT NULL AND length(message) >= 3);
+  USING ((select auth.uid()) = user_id)
+  WITH CHECK ((select auth.uid()) = user_id AND message IS NOT NULL AND length(message) >= 3);
 
 DROP POLICY IF EXISTS "Users can delete own feedback" ON public.community_feedback;
 CREATE POLICY "Users can delete own feedback" ON public.community_feedback
   FOR DELETE TO authenticated
-  USING (auth.uid() = user_id);
+  USING ((select auth.uid()) = user_id);
 
 -- ============================================================
 -- 7. RPC Functions สำหรับ Dynamic Community Dashboard (4 เล่ม)
@@ -198,17 +215,18 @@ ON CONFLICT (id) DO NOTHING;
 DROP POLICY IF EXISTS "Anyone can read user_profiles" ON public.user_profiles;
 CREATE POLICY "Anyone can read user_profiles" ON public.user_profiles FOR SELECT TO anon, authenticated USING (true);
 
--- 1. ภาพรวมตัวเลขสถิติทั้งระบบ
+-- 1. ภาพรวมตัวเลขสถิติทั้งระบบ (SECURITY INVOKER + SET search_path = public)
 CREATE OR REPLACE FUNCTION public.get_community_overview()
 RETURNS json
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
+SET search_path = public
 AS $$
 DECLARE
   result json;
 BEGIN
   SELECT json_build_object(
-    'total_members', (SELECT count(*) FROM auth.users),
+    'total_members', (SELECT count(*) FROM public.user_profiles),
     'total_copies', (SELECT count(*) FROM public.copy_events),
     'total_favorites', (SELECT count(*) FROM public.favorites),
     'total_feedback', (SELECT count(*) FROM public.community_feedback)
@@ -223,7 +241,8 @@ GRANT EXECUTE ON FUNCTION public.get_community_overview() TO anon, authenticated
 CREATE OR REPLACE FUNCTION public.get_top_prompts(limit_count int DEFAULT 10)
 RETURNS TABLE (prompt_id text, total_copies bigint)
 LANGUAGE sql
-SECURITY DEFINER
+SECURITY INVOKER
+SET search_path = public
 AS $$
   SELECT prompt_id, count(*) as total_copies
   FROM public.copy_events
@@ -238,7 +257,8 @@ GRANT EXECUTE ON FUNCTION public.get_top_prompts(int) TO anon, authenticated;
 CREATE OR REPLACE FUNCTION public.get_book_usage_stats()
 RETURNS TABLE (book_number int, total_copies bigint)
 LANGUAGE sql
-SECURITY DEFINER
+SECURITY INVOKER
+SET search_path = public
 AS $$
   SELECT book_number, count(*) as total_copies
   FROM public.copy_events
@@ -253,7 +273,8 @@ GRANT EXECUTE ON FUNCTION public.get_book_usage_stats() TO anon, authenticated;
 CREATE OR REPLACE FUNCTION public.get_daily_usage_stats(days_back int DEFAULT 7)
 RETURNS TABLE (usage_date date, copy_count bigint)
 LANGUAGE sql
-SECURITY DEFINER
+SECURITY INVOKER
+SET search_path = public
 AS $$
   SELECT DATE(created_at) as usage_date, count(*) as copy_count
   FROM public.copy_events

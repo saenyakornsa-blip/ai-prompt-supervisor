@@ -17,14 +17,17 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can read own profile" ON public.user_profiles;
 CREATE POLICY "Users can read own profile" ON public.user_profiles
-  FOR SELECT USING (auth.uid() = id);
+  FOR SELECT USING ((select auth.uid()) = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
 CREATE POLICY "Users can update own profile" ON public.user_profiles
-  FOR UPDATE USING (auth.uid() = id);
+  FOR UPDATE USING ((select auth.uid()) = id);
 
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.user_profiles;
 CREATE POLICY "Users can insert own profile" ON public.user_profiles
-  FOR INSERT WITH CHECK (auth.uid() = id);
+  FOR INSERT WITH CHECK ((select auth.uid()) = id);
 
 -- Trigger auto-create user_profile on auth signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -102,8 +105,8 @@ CREATE POLICY "Users can insert own favorites" ON public.favorites
 CREATE POLICY "Users can delete own favorites" ON public.favorites
   FOR DELETE USING (auth.uid() = user_id);
 
--- Backward compatibility view
-CREATE OR REPLACE VIEW public.user_favorites AS SELECT * FROM public.favorites;
+-- Backward compatibility view (กำหนด security_invoker = true เพื่อไม่ให้ข้าม RLS)
+CREATE OR REPLACE VIEW public.user_favorites WITH (security_invoker = true) AS SELECT * FROM public.favorites;
 
 -- 4. Prompt Ratings & User Feedback Table (ให้คะแนน 1-5 ดาวและคำแนะนำ)
 CREATE TABLE IF NOT EXISTS public.prompt_ratings (
@@ -128,8 +131,8 @@ CREATE POLICY "Users can insert or update own ratings" ON public.prompt_ratings
   FOR ALL USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Backward compatibility view
-CREATE OR REPLACE VIEW public.user_feedback AS SELECT * FROM public.prompt_ratings;
+-- Backward compatibility view (กำหนด security_invoker = true เพื่อไม่ให้ข้าม RLS)
+CREATE OR REPLACE VIEW public.user_feedback WITH (security_invoker = true) AS SELECT * FROM public.prompt_ratings;
 
 -- 5. Dashboard Stats View (สถิติแดชบอร์ดส่วนบุคคล)
 CREATE OR REPLACE VIEW public.v_dashboard_stats WITH (security_invoker = true) AS

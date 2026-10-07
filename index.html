@@ -46,7 +46,8 @@
       <div class="user-menu" id="user-menu">
         <button class="btn-login" id="login-btn" onclick="openAuthModal('login')">เข้าสู่ระบบ</button>
         <div class="user-avatar hidden" id="user-avatar-wrap">
-          <button class="avatar-btn" id="avatar-btn" onclick="toggleUserDropdown(event)">
+          <button class="avatar-btn" id="avatar-btn" onclick="toggleUserDropdown(event)" aria-label="เมนูผู้ใช้งาน">
+            <img id="header-avatar-img" class="header-avatar-img hidden" alt="Avatar" />
             <span class="avatar-initials" id="avatar-initials">ศ</span>
           </button>
           <div class="user-dropdown hidden" id="user-dropdown">
@@ -477,7 +478,10 @@
       <div class="supervisor-badge-card">
         <div class="badge-card-header">
           <div class="badge-avatar-wrap">
+            <img id="profile-avatar-img" class="badge-avatar-img hidden" alt="Profile" />
             <span class="badge-avatar" id="profile-initials">ศ</span>
+            <button type="button" class="badge-avatar-upload-btn" onclick="triggerAvatarUpload()" title="เปลี่ยนรูปโพรไฟล์ (อัปโหลดรูปภาพของคุณ)">📷</button>
+            <input type="file" id="profile-avatar-input" accept="image/*" style="display:none" onchange="handleAvatarSelected(event)" />
           </div>
           <div class="badge-title-wrap">
             <h3 id="profile-card-name">ศึกษานิเทศก์</h3>
@@ -487,6 +491,7 @@
             </div>
             <p id="profile-card-group" class="badge-group-text">กลุ่มงานพัฒนาหลักสูตรและกระบวนการเรียนรู้</p>
             <p id="profile-email" class="badge-email text-muted"></p>
+            <button type="button" id="btn-remove-avatar" onclick="removeAvatarPhoto()" style="display:none; font-size:11px; color:#94a3b8; background:none; border:none; padding:0; cursor:pointer; margin-top:3px;">🔄 ใช้รูปตัวอักษรเริ่มต้น</button>
           </div>
         </div>
 
@@ -524,6 +529,7 @@
                 <option value="สพป.">สพป. (สำนักงานเขตพื้นที่การศึกษาประถมศึกษา)</option>
                 <option value="สพม.">สพม. (สำนักงานเขตพื้นที่การศึกษามัธยมศึกษา)</option>
                 <option value="สช.">สช. (สำนักงานคณะกรรมการส่งเสริมการศึกษาเอกชน)</option>
+                <option value="อบจ.">อบจ. (องค์การบริหารส่วนจังหวัด)</option>
                 <option value="อปท.">อปท. / กทม. (องค์กรปกครองส่วนท้องถิ่น / กรุงเทพมหานคร)</option>
                 <option value="สอศ.">สอศ. (สำนักงานคณะกรรมการการอาชีวศึกษา)</option>
                 <option value="อื่นๆ">อื่นๆ</option>

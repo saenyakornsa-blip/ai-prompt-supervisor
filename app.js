@@ -1567,6 +1567,7 @@ function updateProfileUI(user) {
   const loginBtn        = document.getElementById('login-btn');
   const userAvatarWrap  = document.getElementById('user-avatar-wrap');
   const avatarInitials  = document.getElementById('avatar-initials');
+  const headerAvatarImg = document.getElementById('header-avatar-img');
   const dropdownName    = document.getElementById('dropdown-name');
   const dropdownEmail   = document.getElementById('dropdown-email');
   const logoutBtn       = document.getElementById('logout-btn');
@@ -1577,12 +1578,32 @@ function updateProfileUI(user) {
     if (loginBtn) loginBtn.classList.add('hidden');
     if (userAvatarWrap) userAvatarWrap.classList.remove('hidden');
 
-    const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'ผู้ใช้';
+    const profile = (typeof getSupervisorProfile === 'function') ? getSupervisorProfile() : null;
+    const displayName = profile?.name || user.user_metadata?.display_name || user.email?.split('@')[0] || 'ศึกษานิเทศก์';
     const email = user.email || '';
 
     // Initials: First Thai or English character
-    const initial = displayName.trim().charAt(0).toUpperCase() || '👤';
+    const initial = displayName.trim().charAt(0).toUpperCase() || 'ศ';
     if (avatarInitials) avatarInitials.textContent = initial;
+
+    // Resolve avatar URL
+    const avatarUrl = profile?.avatarUrl || user.user_metadata?.avatar_url || user.user_metadata?.picture || (email ? `https://unavatar.io/${encodeURIComponent(email.trim().toLowerCase())}?fallback=false` : '');
+
+    if (headerAvatarImg) {
+      if (avatarUrl) {
+        headerAvatarImg.src = avatarUrl;
+        headerAvatarImg.classList.remove('hidden');
+        if (avatarInitials) avatarInitials.classList.add('hidden');
+        headerAvatarImg.onerror = function() {
+          headerAvatarImg.classList.add('hidden');
+          if (avatarInitials) avatarInitials.classList.remove('hidden');
+        };
+      } else {
+        headerAvatarImg.classList.add('hidden');
+        if (avatarInitials) avatarInitials.classList.remove('hidden');
+      }
+    }
+
     if (dropdownName) dropdownName.textContent = displayName;
     if (dropdownEmail) dropdownEmail.textContent = email;
     if (userName) userName.textContent = displayName;
@@ -1590,8 +1611,6 @@ function updateProfileUI(user) {
     if (profName) profName.textContent = displayName;
     const profEmail = document.getElementById('profile-email');
     if (profEmail) profEmail.textContent = email;
-    const profInitials = document.getElementById('profile-initials');
-    if (profInitials) profInitials.textContent = initial;
     if (logoutBtn) logoutBtn.classList.remove('hidden');
 
     // Update bottom nav profile
@@ -1645,22 +1664,33 @@ document.addEventListener('click', (e) => {
 const SUPERVISOR_PROFILE_KEY = 'ai_prompt_supervisor_profile';
 
 function getSupervisorProfile() {
+  let savedProf = null;
   try {
     const saved = localStorage.getItem(SUPERVISOR_PROFILE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) savedProf = JSON.parse(saved);
   } catch (e) {
     console.warn('Failed to parse supervisor profile:', e);
   }
   // Default values
   const defaultName = state.user?.user_metadata?.display_name || state.user?.email?.split('@')[0] || '';
+  
+  let defaultAvatar = '';
+  if (state.user) {
+    defaultAvatar = state.user.user_metadata?.avatar_url || state.user.user_metadata?.picture || '';
+    if (!defaultAvatar && state.user.email) {
+      defaultAvatar = `https://unavatar.io/${encodeURIComponent(state.user.email.trim().toLowerCase())}?fallback=false`;
+    }
+  }
+
   return {
-    name: defaultName,
-    org: 'สพป.',
-    area: '',
-    group: 'กลุ่มงานพัฒนาหลักสูตรและการเรียนรู้',
-    rank: 'ศึกษานิเทศก์ชำนาญการพิเศษ',
-    subject: '',
-    autoFillEnabled: true
+    name: savedProf?.name ?? defaultName,
+    avatarUrl: savedProf?.avatarUrl !== undefined ? savedProf.avatarUrl : defaultAvatar,
+    org: savedProf?.org || 'สพป.',
+    area: savedProf?.area || '',
+    group: savedProf?.group || 'กลุ่มงานพัฒนาหลักสูตรและการเรียนรู้',
+    rank: savedProf?.rank || 'ศึกษานิเทศก์ชำนาญการพิเศษ',
+    subject: savedProf?.subject || '',
+    autoFillEnabled: savedProf?.autoFillEnabled ?? true
   };
 }
 
@@ -1689,10 +1719,33 @@ function renderSupervisorProfile() {
   const cardEmail = document.getElementById('profile-email');
   if (cardEmail) cardEmail.textContent = state.user?.email || 'ยังไม่ได้เข้าสู่ระบบ';
 
+  // Update Avatar in Badge Card
+  const profileAvatarImg = document.getElementById('profile-avatar-img');
   const initialsEl = document.getElementById('profile-initials');
-  if (initialsEl) {
-    const initial = (profile.name || '').trim().charAt(0).toUpperCase() || (state.user ? 'ศ' : 'ศ');
-    initialsEl.textContent = initial || 'ศ';
+  const btnRemoveAvatar = document.getElementById('btn-remove-avatar');
+
+  const initial = (profile.name || '').trim().charAt(0).toUpperCase() || (state.user ? 'ศ' : 'ศ');
+  if (initialsEl) initialsEl.textContent = initial || 'ศ';
+
+  const avatarUrl = profile.avatarUrl || state.user?.user_metadata?.avatar_url || state.user?.user_metadata?.picture || (state.user?.email ? `https://unavatar.io/${encodeURIComponent(state.user.email.trim().toLowerCase())}?fallback=false` : '');
+
+  if (profileAvatarImg) {
+    if (avatarUrl) {
+      profileAvatarImg.src = avatarUrl;
+      profileAvatarImg.classList.remove('hidden');
+      if (initialsEl) initialsEl.classList.add('hidden');
+      if (btnRemoveAvatar) btnRemoveAvatar.style.display = 'inline-block';
+
+      profileAvatarImg.onerror = function() {
+        profileAvatarImg.classList.add('hidden');
+        if (initialsEl) initialsEl.classList.remove('hidden');
+        if (btnRemoveAvatar) btnRemoveAvatar.style.display = 'none';
+      };
+    } else {
+      profileAvatarImg.classList.add('hidden');
+      if (initialsEl) initialsEl.classList.remove('hidden');
+      if (btnRemoveAvatar) btnRemoveAvatar.style.display = 'none';
+    }
   }
 
   // Stats in Badge Card
@@ -1751,6 +1804,7 @@ function updateAreaPlaceholder() {
   if (org === 'สพป.') areaInput.placeholder = 'เช่น สพป. เชียงใหม่ เขต 1';
   else if (org === 'สพม.') areaInput.placeholder = 'เช่น สพม. กรุงเทพมหานคร เขต 1';
   else if (org === 'สช.') areaInput.placeholder = 'เช่น สำนักงานการศึกษาเอกชนจังหวัดสงขลา';
+  else if (org === 'อบจ.') areaInput.placeholder = 'เช่น กองการศึกษา ศาสนาและวัฒนธรรม อบจ.เชียงใหม่';
   else if (org === 'อปท.') areaInput.placeholder = 'เช่น สำนักการศึกษา เทศบาลนครนนทบุรี';
   else if (org === 'สอศ.') areaInput.placeholder = 'เช่น สถาบันการอาชีวศึกษาภาคเหนือ 1';
   else areaInput.placeholder = 'เช่น หน่วยงานต้นสังกัด';
@@ -1780,8 +1834,10 @@ function updateAutofillPreview() {
 }
 
 function saveSupervisorProfile() {
+  const currentProf = getSupervisorProfile();
   const profile = {
     name: document.getElementById('profile-input-name')?.value?.trim() || '',
+    avatarUrl: currentProf.avatarUrl || '',
     org: document.getElementById('profile-input-org')?.value || 'สพป.',
     area: document.getElementById('profile-input-area')?.value?.trim() || '',
     group: document.getElementById('profile-input-group')?.value || '',
@@ -1797,6 +1853,7 @@ function saveSupervisorProfile() {
     _sb.auth.updateUser({
       data: {
         display_name: profile.name,
+        avatar_url: profile.avatarUrl,
         supervisor_org: profile.org,
         supervisor_area: profile.area,
         supervisor_group: profile.group,
@@ -1814,6 +1871,97 @@ function saveSupervisorProfile() {
   updateProfileUI(state.user);
   showToast('บันทึกข้อมูลโปรไฟล์และตั้งค่าแทนค่าอัตโนมัติเรียบร้อยแล้ว ✅', 'success');
 }
+
+function triggerAvatarUpload() {
+  const input = document.getElementById('profile-avatar-input');
+  if (input) {
+    input.value = '';
+    input.click();
+  }
+}
+
+function handleAvatarSelected(event) {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+
+  if (!file.type.startsWith('image/')) {
+    showToast('กรุณาเลือกไฟล์รูปภาพเท่านั้น', 'warning');
+    return;
+  }
+
+  if (file.size > 8 * 1024 * 1024) {
+    showToast('ขนาดไฟล์รูปภาพไม่ควรเกิน 8MB', 'warning');
+    return;
+  }
+
+  showToast('กำลังประมวลผลรูปโพรไฟล์...', 'info');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      try {
+        const canvas = document.createElement('canvas');
+        const maxDim = 256;
+        const width = img.width;
+        const height = img.height;
+
+        const minDim = Math.min(width, height);
+        const startX = (width - minDim) / 2;
+        const startY = (height - minDim) / 2;
+
+        canvas.width = maxDim;
+        canvas.height = maxDim;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, startX, startY, minDim, minDim, 0, 0, maxDim, maxDim);
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+
+        const profile = getSupervisorProfile();
+        profile.avatarUrl = compressedDataUrl;
+        localStorage.setItem(SUPERVISOR_PROFILE_KEY, JSON.stringify(profile));
+
+        if (_sb && state.user) {
+          _sb.auth.updateUser({
+            data: { avatar_url: compressedDataUrl }
+          }).catch(err => console.warn('[Supabase] avatar sync error:', err));
+        }
+
+        renderSupervisorProfile();
+        updateProfileUI(state.user);
+        showToast('อัปเดตรูปโพรไฟล์เรียบร้อยแล้ว ✨', 'success');
+      } catch (err) {
+        console.error('Avatar resize error:', err);
+        showToast('เกิดข้อผิดพลาดในการประมวลผลรูปภาพ', 'error');
+      }
+    };
+    img.onerror = function() {
+      showToast('ไม่สามารถเปิดรูปภาพที่เลือกได้', 'error');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeAvatarPhoto() {
+  const profile = getSupervisorProfile();
+  profile.avatarUrl = '';
+  localStorage.setItem(SUPERVISOR_PROFILE_KEY, JSON.stringify(profile));
+
+  if (_sb && state.user) {
+    _sb.auth.updateUser({
+      data: { avatar_url: '' }
+    }).catch(err => console.warn('[Supabase] clear avatar error:', err));
+  }
+
+  renderSupervisorProfile();
+  updateProfileUI(state.user);
+  showToast('รีเซ็ตรูปโพรไฟล์เป็นตัวอักษรเริ่มต้นแล้ว', 'info');
+}
+
+window.triggerAvatarUpload = triggerAvatarUpload;
+window.handleAvatarSelected = handleAvatarSelected;
+window.removeAvatarPhoto = removeAvatarPhoto;
 
 /**
  * แทนค่าตัวแปรใน Prompt อัตโนมัติตามโปรไฟล์ ศน.
